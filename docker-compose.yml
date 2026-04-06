@@ -1,0 +1,44 @@
+services:
+
+  stock_predict:
+    build: 
+      context: .
+      dockerfile: src/serving/Dockerfile
+    ports:
+      - "8000:8000"
+    command: uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - mlflow
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    ports:
+      - "5000:5000"
+    command: "mlflow server --host 0.0.0.0 --port 5000"
+    volumes:
+      - mlflow_data:/mlflow
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - stock_predict
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus    
+    volumes:
+      - grafana_data:/var/lib/grafana 
+
+
+volumes:      
+  mlflow_data:
+  grafana_data:
