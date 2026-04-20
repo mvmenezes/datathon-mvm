@@ -5,7 +5,12 @@ import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 import mlflow
-
+from sklearn.metrics import (
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from .Exceptions.LSTMException import ModelNotTrainedException
 from .LSTMParams import LSTMParams
 from .lstm import ModelFactory
@@ -47,6 +52,14 @@ def train_model(params: LSTMParams):
                 "num_layers": params.num_layers,
                 "learning_rate": params.learning_rate
             })
+        mlflow.log_param("test_size", test_size)
+        mlflow.log_param("random_state", random_state)
+        mlflow.log_param("n_features", X_train.shape[1])
+        mlflow.log_param("n_samples_train", X_train.shape[0])
+        mlflow.set_tag("model_type", "classification")
+        mlflow.set_tag("framework", model_class.__module__.split(".")[0])
+        mlflow.set_tag("owner", "grupo-MVM")
+        mlflow.set_tag("phase", "datathon-fase05")
         
         for epoch in range(params.epochs):
             ##Treinamento do Modelo
@@ -89,7 +102,13 @@ def train_model(params: LSTMParams):
         forecast = inverse_values(scaler, forecast, fields)
         real = inverse_values(scaler, y_test, fields)
     
-
+        metrics = {
+            "auc": roc_auc_score(y_test, pred),
+            "precision": precision_score(y_test, pred, zero_division=0),
+            "recall": recall_score(y_test, pred, zero_division=0),
+            "f1": f1_score(y_test, pred, zero_division=0),
+        }
+        mlflow.log_metrics(metrics)
 
         return {
             "message": "Modelo treinado com sucesso. ",

@@ -17,6 +17,10 @@ dependencies = [
     "torch (>=2.10.0,<3.0.0)",
     "mlflow (>=3.9.0,<4.0.0)",
     "prometheus-client (>=0.24.1,<0.25.0)",
+    "pytest (>=9.0.3,<10.0.0)",
+    "pandera (>=0.31.1,<0.32.0)",
+    "hypothesis (>=6.152.1,<7.0.0)",
+    "dvc (>=3.67.1,<4.0.0)",
 ]
 
 [tool.poetry]
