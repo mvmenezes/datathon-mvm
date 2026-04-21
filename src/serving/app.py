@@ -96,43 +96,51 @@ def feature_engineering_post(stock: dict):
 def train_model_post(params: LSTMParams):
         start = time.time()
         if not isinstance(params.epochs, int) or params.epochs <= 0:
-            raise ValueError("O número de épocas deve ser um inteiro positivo.")
+            return JSONResponse(status_code=400, content={"erro":"O número de épocas deve ser um inteiro positivo."})
         if not isinstance(params.window, int) or params.window <= 0:
-            raise ValueError("O tamanho da janela deve ser um inteiro positivo.")
+            return JSONResponse(status_code=400, content={"erro":"O tamanho da janela deve ser um inteiro positivo."})
         if not isinstance(params.hidden_size, int) or params.hidden_size <= 0:
-            raise ValueError("O tamanho da camada oculta deve ser um inteiro positivo.")    
+            return JSONResponse(status_code=400, content={"erro":"O tamanho da camada oculta deve ser um inteiro positivo."})   
         if not isinstance(params.num_layers, int) or params.num_layers <= 0:
-            raise ValueError("O número de camadas deve ser um inteiro positivo.")   
+            return JSONResponse(status_code=400, content={"erro":"O número de camadas deve ser um inteiro positivo."})  
         if  not isinstance(params.learning_rate, float) or params.learning_rate <= 0:
-            raise ValueError("A taxa de aprendizado deve ser um número positivo.")  
+            return JSONResponse(status_code=400, content={"erro":"A taxa de aprendizado deve ser um número positivo."})  
         if not isinstance(params.per_training, float) or params.per_training <= 0 or params.per_training >= 1:
-            raise ValueError("A porcentagem de treinamento deve ser um número entre 0 e 1.")    
+            return JSONResponse(status_code=400, content={"erro":"A porcentagem de treinamento deve ser um número entre 0 e 1."})   
         if not isinstance(params.stock, str) or not params.stock:
-            raise ValueError("O nome da ação deve ser uma string não vazia.")
+            return JSONResponse(status_code=400, content={"erro":"O nome da ação deve ser uma string não vazia."})
+        if params.model_type not in ["complex", "simple"]:
+            return JSONResponse(status_code=400, content={"erro":"O tipo do modelo deve ser entre 'complex' e 'simple'."})
         
         result = train_model(params)
-        #valor_real_acao.set(np.mean(result["forecast"]))
-        #previsao_acao.set(np.mean(result["real_price"]))
+        valor_real_acao.set(np.mean(result["forecast"]))
+        previsao_acao.set(np.mean(result["real_price"]))
         erro_previsao_val = np.mean(result["real_price"]) - np.mean(result["forecast"])
         print(erro_previsao_val)
-        #erro_previsao.set(abs(round(erro_previsao_val,2)))
+        erro_previsao.set(abs(round(erro_previsao_val,2)))
         print(f"Tempo de treinamento: {time.time() - start}")
-        #tempo_processamento_train.observe(time.time() - start)
+        tempo_processamento_train.observe(time.time() - start)
         
         return {"mensagem":"result"}
 
-@app.get("/predict")
+@app.post("/predict")
 def predict_post(params: PredictParams):
     
     with tempo_processamento_predict.time():
         if not isinstance(params.days, int) or params.days <= 0:
-            raise ValueError("O número de dias deve ser um inteiro positivo.")  
+            return JSONResponse(status_code=400, content={"erro":"O número de dias deve ser um inteiro positivo."}) 
         if not isinstance(params.stock, str) or not params.stock:
-            raise ValueError("O nome da ação deve ser uma string não vazia.")
+            return JSONResponse(status_code=400, content={"erro":"O nome da ação deve ser uma string não vazia."})
+        if not isinstance(params.model_type, str) or not params.model_type:
+            return JSONResponse(status_code=400, content={"erro":"O tipo do modelo deve ser uma string não vazia."})
+        if params.model_type not in ["complex", "simple"]:
+            return JSONResponse(status_code=400, content={"erro":"O tipo do modelo deve ser entre 'complex' e 'simple'."})
         
         result = predict(params)
         
         return result
+
+
 
 
 

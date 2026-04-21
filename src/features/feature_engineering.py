@@ -17,11 +17,11 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         
         #remove dados
         df.dropna(inplace=True)
-        
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         #Cria a estrategia de medias moveis
         df = _create_strategy(df)
         df.to_csv(f"data/processed/{stock}.csv", index=False)
         
-        
+        return df
     except(ValueError):
         raise ValueError(f"Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")

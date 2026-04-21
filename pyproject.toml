@@ -21,6 +21,8 @@ dependencies = [
     "pandera (>=0.31.1,<0.32.0)",
     "hypothesis (>=6.152.1,<7.0.0)",
     "dvc (>=3.67.1,<4.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "httpx (>=0.28.1,<0.29.0)",
 ]
 
 [tool.poetry]
