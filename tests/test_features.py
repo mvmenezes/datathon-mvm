@@ -38,5 +38,4 @@ def test_row_count_preserved():
     """Número de registros deve ser preservado."""
     data = recover_data_from_raw(STOCK)
     result = feature_engineering(data,STOCK)
-    print(len(result) , len(data))
     assert len(result) == len(data)
