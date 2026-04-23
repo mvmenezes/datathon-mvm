@@ -1,0 +1,29 @@
+# dvc.yaml
+stages:
+  prepare:
+    foreach: ${stocks}
+    do:
+      cmd: python src/features/data.py --stock ${item}
+      always_changed: true
+      params:
+        - stocks
+      outs:
+        - data/raw/${item}.csv
+  featurize:
+    foreach: ${stocks}
+    do:
+      cmd: python src/features/feature_engineering.py --stock ${item}
+      deps:
+        - data/raw/${item}.csv
+      outs:
+        - data/processed/${item}.parquet
+  train:
+    foreach: ${stocks}
+    do:
+      cmd: python -m src.models.train --stock ${item}
+      deps:
+        - data/processed/${item}.parquet
+        - configs/model_config.yaml
+      outs:
+        - data/models/lstm_${item}_simple.pth
+        - data/models/lstm_${item}_complex.pth

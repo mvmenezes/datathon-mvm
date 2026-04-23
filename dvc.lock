@@ -1,0 +1,50 @@
+schema: '2.0'
+stages:
+  prepare@VALE3.SA:
+    cmd: python src/features/data.py --stock VALE3.SA
+    params:
+      params.yaml:
+        stocks:
+        - VALE3.SA
+        - USIM5.SA
+    outs:
+    - path: data/raw/VALE3.SA.csv
+      hash: md5
+      md5: c444ce1c375b37b4b5606bd41a7b3e18
+      size: 205609
+  featurize@VALE3.SA:
+    cmd: python src/features/feature_engineering.py --stock VALE3.SA
+    deps:
+    - path: data/raw/VALE3.SA.csv
+      hash: md5
+      md5: c444ce1c375b37b4b5606bd41a7b3e18
+      size: 205609
+    outs:
+    - path: data/processed/VALE3.SA.parquet
+      hash: md5
+      md5: d001ab323cbd1f2161a439e1a574de02
+      size: 128562
+  prepare@USIM5.SA:
+    cmd: python src/features/data.py --stock USIM5.SA
+    params:
+      params.yaml:
+        stocks:
+        - VALE3.SA
+        - USIM5.SA
+    outs:
+    - path: data/raw/USIM5.SA.csv
+      hash: md5
+      md5: c06421ccf7f43aba89ebed73e628ec44
+      size: 204767
+  featurize@USIM5.SA:
+    cmd: python src/features/feature_engineering.py --stock USIM5.SA
+    deps:
+    - path: data/raw/USIM5.SA.csv
+      hash: md5
+      md5: c06421ccf7f43aba89ebed73e628ec44
+      size: 204767
+    outs:
+    - path: data/processed/USIM5.SA.parquet
+      hash: md5
+      md5: 5482374a952e8d9a969ed30bb04e1f87
+      size: 119928

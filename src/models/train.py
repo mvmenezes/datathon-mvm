@@ -11,16 +11,29 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from .Exceptions.LSTMException import ModelNotTrainedException
-from .LSTMParams import LSTMParams
-from .lstm import ModelFactory
+from src.models.Exceptions.LSTMException import ModelNotTrainedException
+from src.models.LSTMParams import LSTMParams
+from src.models.lstm import ModelFactory
 import numpy as np
 from src.features.data import recover_data_from_processed
+import yaml
+from pathlib import Path
+import argparse
+
+
+
+MODEL_CONFIG = Path("configs/model_config.yaml")
+
 model = None
 MODEL_PATH = "./data/models/lstm"
+MLFLOW_URI = "http://172.18.0.2:5000"
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stock", required=True, help="Ex: PETR4.SA")
+    return parser.parse_args()
 
 def train_model(params: LSTMParams):
-    mlflow.set_tracking_uri("http://172.18.0.2:5000")
+    mlflow.set_tracking_uri(MLFLOW_URI)
 
     data_downloaded = recover_data_from_processed(params.stock)
     fields = ["Close","Volume","Dolar","short_mm","medium_mm","large_mm"]
@@ -52,12 +65,12 @@ def train_model(params: LSTMParams):
                 "num_layers": params.num_layers,
                 "learning_rate": params.learning_rate
             })
-        mlflow.log_param("test_size", test_size)
-        mlflow.log_param("random_state", random_state)
+        mlflow.log_param("test_size", 0)
+        mlflow.log_param("random_state", 0)
         mlflow.log_param("n_features", X_train.shape[1])
         mlflow.log_param("n_samples_train", X_train.shape[0])
         mlflow.set_tag("model_type", "classification")
-        mlflow.set_tag("framework", model_class.__module__.split(".")[0])
+        mlflow.set_tag("framework", model.__module__.split(".")[0])
         mlflow.set_tag("owner", "grupo-MVM")
         mlflow.set_tag("phase", "datathon-fase05")
         
@@ -91,7 +104,7 @@ def train_model(params: LSTMParams):
                 best_loss = loss_te
                 # salvar pesos
                 torch.save(model.state_dict(), MODEL_PATH+f"_{params.stock}_{params.model_type}.pth")
-                forecast = pred
+                pred_y = pred
                 run_id = run.info.run_id
             ratio = loss_te / loss_tr if loss_tr > 0 else float('inf')
             if ratio > 2.0:
@@ -99,17 +112,17 @@ def train_model(params: LSTMParams):
             else:
                 mlflow.log_metric("overfitting", 0)
 
-        forecast = inverse_values(scaler, forecast, fields)
+        forecast = inverse_values(scaler, pred_y, fields)
         real = inverse_values(scaler, y_test, fields)
     
-        metrics = {
-            "auc": roc_auc_score(y_test, pred),
-            "precision": precision_score(y_test, pred, zero_division=0),
-            "recall": recall_score(y_test, pred, zero_division=0),
-            "f1": f1_score(y_test, pred, zero_division=0),
+        """metrics = {
+            "auc": roc_auc_score(y_test, pred_y),
+            "precision": precision_score(y_test, pred_y, zero_division=0),
+            "recall": recall_score(y_test, pred_y, zero_division=0),
+            "f1": f1_score(y_test, pred_y, zero_division=0),
         }
         mlflow.log_metrics(metrics)
-
+        """
         return {
             "message": "Modelo treinado com sucesso. ",
             "stock": params.stock,
@@ -154,8 +167,8 @@ def _create_window(data_scaled, length=10):
     for i in range(len(data_scaled)-window):
         x.append(data_scaled[i:i+window])
         y.append(data_scaled[i+window][0])  #Peguei a coluna Close
-    X_torch = torch.tensor(x, dtype=torch.float32)
-    y_torch = torch.tensor(y, dtype=torch.float32)
+    X_torch = torch.tensor(np.array(x), dtype=torch.float32)
+    y_torch = torch.tensor(np.array(y), dtype=torch.float32)
     return X_torch, y_torch
 
 def _separate_training_data(percentual, X_torch, y_torch):
@@ -168,3 +181,32 @@ def _separate_training_data(percentual, X_torch, y_torch):
     y_test  = y_torch[train_size:]
 
     return X_train, y_train, X_test, y_test
+
+def load_config() -> LSTMParams:
+    with open(MODEL_CONFIG) as f:
+        cfg = yaml.safe_load(f)
+
+    return LSTMParams(
+        stock         = "",
+        epochs        = cfg["training"]["epochs"],
+        per_training  = cfg["training"]["per_training"],
+        learning_rate = cfg["training"]["learning_rate"],
+        window        = cfg["training"]["window"],
+        model_type    = "",
+        hidden_size   = cfg["model"]["hidden_size"],
+        num_layers    = cfg["model"]["num_layers"],
+    )
+if __name__ == "__main__":
+    MLFLOW_URI = "file:./mlruns"
+    args = parse_args()
+    stock = args.stock
+    init_params = load_config()
+    init_params.stock = stock
+    init_params.model_type = "simple"
+
+    try:
+        train_model(init_params)
+        init_params.model_type = "complex"
+        train_model(init_params)
+    except(ValueError) as e:
+        raise ValueError(f"Erro ao processar {stock}")

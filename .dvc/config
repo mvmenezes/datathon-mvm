@@ -1,4 +1,4 @@
 [core]
     remote = remote_folder
 ['remote "remote_folder"']
-    url = gdrive://1eYBG8V880bIRFe3oSD_tiWpN6_1d-myj
+    url = s3://mvmtechchallenge05/datathon/
