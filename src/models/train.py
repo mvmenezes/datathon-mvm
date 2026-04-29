@@ -1,8 +1,18 @@
 
 import torch
 import torch.nn as nn
-from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 import mlflow
+import argparse
+import socket
+import yaml
+from sklearn.preprocessing import MinMaxScaler
+from src.models.Exceptions.LSTMException import ModelNotTrainedException
+from src.models.LSTMParams import LSTMParams
+from src.models.lstm import ModelFactory
+from src.features.data import recover_data_from_processed
+from pathlib import Path
+
 """
 from sklearn.metrics import (
     f1_score,
@@ -11,16 +21,6 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 """
-from src.models.Exceptions.LSTMException import ModelNotTrainedException
-from src.models.LSTMParams import LSTMParams
-from src.models.lstm import ModelFactory
-import numpy as np
-from src.features.data import recover_data_from_processed
-import yaml
-from pathlib import Path
-import argparse
-import socket
-
 
 MODEL_CONFIG = Path("configs/model_config.yaml")
 
