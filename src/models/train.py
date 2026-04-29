@@ -55,7 +55,7 @@ def train_model(params: LSTMParams):
                           -pt:{params.per_training}
                           -lr:{params.learning_rate}
                           -hs:{params.hidden_size}
-                          -nl:{params.num_layers}""") as run:
+                          -nl:{params.num_layers}"""):
         
         model = ModelFactory.create(params.model_type, hidden_size=params.hidden_size, input_size=input_size, num_layers = params.num_layers)
         criterion = nn.MSELoss()
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         init_params.model_type = "complex"
         train_model(init_params)
     except(ValueError) as e:
-        raise ValueError(f"Erro ao processar {stock}")
+        raise ValueError(f"Erro ao processar {stock} - {str(e)}")
 
 
 def check_host(ip: str, porta: int, timeout: float = 3.0) -> bool:
