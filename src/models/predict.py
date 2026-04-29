@@ -1,7 +1,6 @@
 
 import torch
 from sklearn.preprocessing import MinMaxScaler
-import mlflow
 import math
 from .Exceptions.LSTMException import ModelNotTrainedException
 from .PredictParams import PredictParams
