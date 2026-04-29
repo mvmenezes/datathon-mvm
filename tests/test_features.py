@@ -1,4 +1,4 @@
-import pandera as pa
+import pandera.pandas as pa
 from pandera import Column, DataFrameSchema
 from src.features.data import  recover_data_from_raw
 from src.features.feature_engineering import feature_engineering
