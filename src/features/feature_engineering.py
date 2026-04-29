@@ -23,7 +23,6 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         #Cria a estrategia de medias moveis
         df = _create_strategy(df)
         df.to_parquet(f"data/processed/{stock}.parquet", index=False)
-        
         return df
     except(ValueError):
         raise ValueError(f"Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")

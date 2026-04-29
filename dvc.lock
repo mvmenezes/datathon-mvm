@@ -10,20 +10,20 @@ stages:
     outs:
     - path: data/raw/VALE3.SA.csv
       hash: md5
-      md5: c444ce1c375b37b4b5606bd41a7b3e18
-      size: 205609
+      md5: 4dfc0bdbaa957ceeb023c718b1526328
+      size: 205700
   featurize@VALE3.SA:
     cmd: python src/features/feature_engineering.py --stock VALE3.SA
     deps:
     - path: data/raw/VALE3.SA.csv
       hash: md5
-      md5: c444ce1c375b37b4b5606bd41a7b3e18
-      size: 205609
+      md5: 4dfc0bdbaa957ceeb023c718b1526328
+      size: 205700
     outs:
     - path: data/processed/VALE3.SA.parquet
       hash: md5
-      md5: d001ab323cbd1f2161a439e1a574de02
-      size: 128562
+      md5: fb5f48e0985eaff7001cc9d4c89d34cc
+      size: 128454
   prepare@USIM5.SA:
     cmd: python src/features/data.py --stock USIM5.SA
     params:
@@ -34,17 +34,57 @@ stages:
     outs:
     - path: data/raw/USIM5.SA.csv
       hash: md5
-      md5: c06421ccf7f43aba89ebed73e628ec44
-      size: 204767
+      md5: 4c6308ab561e34c9808c2d5a4b596414
+      size: 204775
   featurize@USIM5.SA:
     cmd: python src/features/feature_engineering.py --stock USIM5.SA
     deps:
     - path: data/raw/USIM5.SA.csv
       hash: md5
-      md5: c06421ccf7f43aba89ebed73e628ec44
-      size: 204767
+      md5: 4c6308ab561e34c9808c2d5a4b596414
+      size: 204775
     outs:
     - path: data/processed/USIM5.SA.parquet
       hash: md5
-      md5: 5482374a952e8d9a969ed30bb04e1f87
-      size: 119928
+      md5: 01c550f027991475f54d4f07da7f55ca
+      size: 119876
+  train@VALE3.SA:
+    cmd: python -m src.models.train --stock VALE3.SA
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: bca5b674f1465dab2701718f66fcc8ea
+      size: 127
+    - path: data/processed/VALE3.SA.parquet
+      hash: md5
+      md5: fb5f48e0985eaff7001cc9d4c89d34cc
+      size: 128454
+    outs:
+    - path: data/models/lstm_VALE3.SA_complex.pth
+      hash: md5
+      md5: 48eec3b6ec5a6d1ac2c37b4dc21d8842
+      size: 222801
+    - path: data/models/lstm_VALE3.SA_simple.pth
+      hash: md5
+      md5: 674a0673adbcd6c1dd38a544d84f24e9
+      size: 211413
+  train@USIM5.SA:
+    cmd: python -m src.models.train --stock USIM5.SA
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: bca5b674f1465dab2701718f66fcc8ea
+      size: 127
+    - path: data/processed/USIM5.SA.parquet
+      hash: md5
+      md5: 01c550f027991475f54d4f07da7f55ca
+      size: 119876
+    outs:
+    - path: data/models/lstm_USIM5.SA_complex.pth
+      hash: md5
+      md5: 497081d13abfa362d4d0b152e9263059
+      size: 222801
+    - path: data/models/lstm_USIM5.SA_simple.pth
+      hash: md5
+      md5: 0f173acf25dde99a57e87a0d3c6d066b
+      size: 211413

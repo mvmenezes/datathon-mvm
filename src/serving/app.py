@@ -24,6 +24,7 @@ import time
 import numpy as np
 #from src.stocks_predict.model.PredictParams import PredictParamas
 #from ..services.ServiceStock import train_model_service, predict_service
+from src.agent.react_agent import run_agent
 from src.features.data import save_data, recover_data_from_processed, recover_data_from_raw
 from src.models.LSTMParams import LSTMParams
 from src.models.PredictParams import PredictParams
@@ -121,7 +122,7 @@ def train_model_post(params: LSTMParams):
         print(f"Tempo de treinamento: {time.time() - start}")
         tempo_processamento_train.observe(time.time() - start)
         
-        return {"mensagem":"result"}
+        return {"mensagem":result}
 
 @app.post("/predict")
 def predict_post(params: PredictParams):
@@ -142,6 +143,13 @@ def predict_post(params: PredictParams):
 
 
 
+@app.post("/input_llm")
+def input_llm(input: dict):
+    try:
+        answer = run_agent(input.get("input"))
+        return {"mensagem": answer}
+    except(ValueError) as e:
+        return JSONResponse(status_code=400, content={"erro": str(e)})
 
 
 # ============================================================================

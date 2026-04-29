@@ -19,13 +19,13 @@ from src.features.data import recover_data_from_processed
 import yaml
 from pathlib import Path
 import argparse
-
+import socket
 
 
 MODEL_CONFIG = Path("configs/model_config.yaml")
 
 model = None
-MODEL_PATH = "./data/models/lstm"
+MODEL_PATH = "./data/models/"
 MLFLOW_URI = "http://172.18.0.2:5000"
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -33,7 +33,11 @@ def parse_args():
     return parser.parse_args()
 
 def train_model(params: LSTMParams):
-    mlflow.set_tracking_uri(MLFLOW_URI)
+
+    if check_host(ip="172.18.0.2", porta=5000):
+        mlflow.set_tracking_uri(MLFLOW_URI)
+    else:
+        mlflow.set_tracking_uri("file:./mlruns")
 
     data_downloaded = recover_data_from_processed(params.stock)
     fields = ["Close","Volume","Dolar","short_mm","medium_mm","large_mm"]
@@ -103,7 +107,7 @@ def train_model(params: LSTMParams):
                 print(f"Saving best model with test loss {loss_te:.6f} at epoch {epoch}. Better than previous best loss {best_loss:.6f}")
                 best_loss = loss_te
                 # salvar pesos
-                torch.save(model.state_dict(), MODEL_PATH+f"_{params.stock}_{params.model_type}.pth")
+                torch.save(model.state_dict(), MODEL_PATH+f"lstm_{params.stock}_{params.model_type}.pth")
                 pred_y = pred
                 run_id = run.info.run_id
             ratio = loss_te / loss_tr if loss_tr > 0 else float('inf')
@@ -148,7 +152,7 @@ def _load_model(stock, model_type="simple", hidden_size=64, input_size=6, num_la
     model = ModelFactory.create(model_type, hidden_size=hidden_size, input_size=input_size, num_layers = num_layers)
     try:
         model.load_state_dict(torch.load(MODEL_PATH+f"_{stock}_{model_type}.pth"))
-        checkpoints = torch.load(MODEL_PATH+f"_{stock}_{model_type}.pth")
+        checkpoints = torch.load(MODEL_PATH+f"lstm_{stock}_{model_type}.pth")
     except(FileNotFoundError):
         raise ModelNotTrainedException("Modelo não treinado para essa ação. Por favor, treine o modelo antes de fazer previsões.")
     model.eval()
@@ -197,7 +201,6 @@ def load_config() -> LSTMParams:
         num_layers    = cfg["model"]["num_layers"],
     )
 if __name__ == "__main__":
-    MLFLOW_URI = "file:./mlruns"
     args = parse_args()
     stock = args.stock
     init_params = load_config()
@@ -210,3 +213,14 @@ if __name__ == "__main__":
         train_model(init_params)
     except(ValueError) as e:
         raise ValueError(f"Erro ao processar {stock}")
+
+
+def check_host(ip: str, porta: int, timeout: float = 3.0) -> bool:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        resultado = sock.connect_ex((ip, porta))
+        sock.close()
+        return resultado == 0  # 0 = conectou, qualquer outro = falhou
+    except socket.error:
+        return False

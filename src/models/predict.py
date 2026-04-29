@@ -1,14 +1,10 @@
 
-from fastapi import params
-from fastapi import params
 import torch
-import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 import mlflow
-
+import math
 from .Exceptions.LSTMException import ModelNotTrainedException
 from .PredictParams import PredictParams
-from .LSTMParams import LSTMParams
 from .lstm import ModelFactory
 import numpy as np
 from src.features.data import recover_data_from_processed
@@ -30,7 +26,6 @@ def predict(params: PredictParams):
     X_torch, _ = _create_window(data_scaled, length=3)
     
     model, checkpoints = _load_model(params.stock, params.model_type)
-    print(checkpoints)
     if model:
         model.eval()
         with torch.no_grad():
@@ -41,7 +36,8 @@ def predict(params: PredictParams):
     pred_real = scaler.inverse_transform(dummy)[:,0]
     return {
         "stock": params.stock,
-        "predicted_price": round(pred_real[-1],2)
+        "predicted_price": truncar(pred_real[-1],2),
+        "model_type": params.model_type
         
     }
 
@@ -68,8 +64,8 @@ def _create_window(data_scaled, length=10):
     for i in range(len(data_scaled)-window):
         x.append(data_scaled[i:i+window])
         y.append(data_scaled[i+window][0])  #Peguei a coluna Close
-    X_torch = torch.tensor(x, dtype=torch.float32)
-    y_torch = torch.tensor(y, dtype=torch.float32)
+    X_torch = torch.tensor(np.array(x), dtype=torch.float32)
+    y_torch = torch.tensor(np.array(y), dtype=torch.float32)
     return X_torch, y_torch
 
 def _separate_training_data(percentual, X_torch, y_torch):
@@ -82,3 +78,8 @@ def _separate_training_data(percentual, X_torch, y_torch):
     y_test  = y_torch[train_size:]
 
     return X_train, y_train, X_test, y_test
+
+
+def truncar(numero, casas=2):
+    fator = 10 ** casas
+    return math.trunc(numero * fator) / fator
