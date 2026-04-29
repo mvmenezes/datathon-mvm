@@ -1,7 +1,6 @@
 import pandera as pa
 from pandera import Column, DataFrameSchema
-from hypothesis import given
-from src.features.data import recover_data_from_processed, recover_data_from_raw
+from src.features.data import  recover_data_from_raw
 from src.features.feature_engineering import feature_engineering
 
 STOCK = "TESTE"

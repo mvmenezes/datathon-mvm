@@ -25,7 +25,7 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         df.to_parquet(f"data/processed/{stock}.parquet", index=False)
         return df
     except(ValueError):
-        raise ValueError(f"Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")
+        raise ValueError("Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")
 
 def recover_data_from_raw(stock: str):
     try:
@@ -41,4 +41,4 @@ if __name__ == "__main__":
         df = recover_data_from_raw(stock)
         feature_engineering(df, stock)
     except(ValueError) as e:
-        raise ValueError(f"Erro ao processar {stock}")
+        raise ValueError(f"Erro ao processar {stock} - {str(e)}")

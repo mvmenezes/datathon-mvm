@@ -25,10 +25,10 @@ import numpy as np
 #from src.stocks_predict.model.PredictParams import PredictParamas
 #from ..services.ServiceStock import train_model_service, predict_service
 from src.agent.react_agent import run_agent
-from src.features.data import save_data, recover_data_from_processed, recover_data_from_raw
+from src.features.data import save_data,  recover_data_from_raw
 from src.models.LSTMParams import LSTMParams
 from src.models.PredictParams import PredictParams
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Histogram, Gauge
 from ..features.feature_engineering import feature_engineering
 from src.models.train import train_model
 from src.models.predict import predict

@@ -1,16 +1,16 @@
 
-from fastapi import params
-from fastapi import params
 import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 import mlflow
+"""
 from sklearn.metrics import (
     f1_score,
     precision_score,
     recall_score,
     roc_auc_score,
 )
+"""
 from src.models.Exceptions.LSTMException import ModelNotTrainedException
 from src.models.LSTMParams import LSTMParams
 from src.models.lstm import ModelFactory
@@ -109,7 +109,6 @@ def train_model(params: LSTMParams):
                 # salvar pesos
                 torch.save(model.state_dict(), MODEL_PATH+f"lstm_{params.stock}_{params.model_type}.pth")
                 pred_y = pred
-                run_id = run.info.run_id
             ratio = loss_te / loss_tr if loss_tr > 0 else float('inf')
             if ratio > 2.0:
                 mlflow.log_metric("overfitting", 1)
@@ -130,7 +129,6 @@ def train_model(params: LSTMParams):
         return {
             "message": "Modelo treinado com sucesso. ",
             "stock": params.stock,
-            #"run_id": run_id,
             "loss_te": loss_te,
             "loss_tr": loss_tr,
             "best_val_loss": best_loss,
