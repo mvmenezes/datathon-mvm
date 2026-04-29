@@ -59,8 +59,6 @@ Pergunta: {input}
 
 
 
-llm   = ChatOpenAI(model=model_name, temperature=temperature)
-model_with_tools = llm.bind_tools(tools)
 
 
 
@@ -71,7 +69,9 @@ def create_stock_agent():
     """
     
 
-    agent = create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT)
+    llm   = ChatOpenAI(model=model_name, temperature=temperature)
+    model_with_tools = llm.bind_tools(tools)
+    agent = create_agent(model_with_tools, tools=tools, system_prompt=SYSTEM_PROMPT)
 
 
     logger.info("Agente criado com %d tools", len(tools))
