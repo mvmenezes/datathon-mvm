@@ -22,24 +22,22 @@ jobs:
       - name: Install Poetry
         run: pip install poetry
 
-      - name: Configure Poetry
-        run: poetry config virtualenvs.create false
 
       - name: Install dependencies
         run: poetry install --no-interaction --no-root
 
       - name: Lint (ruff)
-        run: ruff check src/ tests/ evaluation/
+        run: poetry run ruff check src/ tests/ evaluation/
 
       - name: Type check (mypy)
-        run: mypy src/ --ignore-missing-imports
+        run: poetry run mypy src/ --ignore-missing-imports
 
       - name: Security scan (bandit)
-        run: bandit -r src/ -c pyproject.toml
+        run: poetry run bandit -r src/ -c pyproject.toml
 
       - name: Unit tests (pytest)
         run: |
-          pytest tests/ -x \
+          poetry runpytest tests/ -x \
             --cov=src \
             --cov-report=xml \
             --cov-fail-under=60 \
