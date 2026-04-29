@@ -19,7 +19,7 @@ def inverse_values(scaler, input_data, fields):
     return inversed
 
 def predict(params: PredictParams):
-    pred = 0.0
+    pred: torch.Tensor = 0.0
     last_x_days = recover_data_from_processed(str(params.stock)).tail(params.days)
     scaler , data_scaled = _scale_data(last_x_days, ["Close","Volume","Dolar","short_mm","medium_mm","large_mm"])
     X_torch, _ = _create_window(data_scaled, length=3)
@@ -28,7 +28,7 @@ def predict(params: PredictParams):
     if model:
         model.eval()
         with torch.no_grad():
-            pred: torch.Tensor = model(X_torch).squeeze()
+            pred = model(X_torch).squeeze()
     pred_np = pred.numpy().reshape(-1,1)
     dummy = np.zeros((len(pred_np),6))
     dummy[:,0] = pred_np[:,0]
