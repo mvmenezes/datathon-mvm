@@ -2,6 +2,7 @@
 name: Datathon CI
 
 on:
+  workflow_dispatch:
   push:
     paths: ['src/**', 'tests/**', 'evaluation/**']
   pull_request:
