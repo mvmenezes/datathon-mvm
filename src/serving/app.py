@@ -78,17 +78,17 @@ def teste():
 @app.post("/download_data")
 def download_data(stock: dict):
     try:
-        save_data(stock.get("stock"), stock.get("periodo", '6y'))
+        save_data(str(stock.get("stock")), str(stock.get("periodo", '6y')))
         return {"mensagem": f"Dados para a ação {stock} baixados com sucesso."}
     except(ValueError) as e:
-        return JSONResponse(status_code=400, content={"erro": str(e)})@app.post("/download_data")
+        return JSONResponse(status_code=400, content={"erro": str(e)})
 
 
 @app.post("/feature_engineering")
 def feature_engineering_post(stock: dict):
     try:
-        df = recover_data_from_raw(stock.get("stock"))
-        feature_engineering(df, stock.get("stock"))
+        df = recover_data_from_raw(str(stock.get("stock")))
+        feature_engineering(df, str(stock.get("stock")))
         return {"mensagem": f"Features para a ação {stock} criadas com sucesso."}
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})
@@ -210,7 +210,7 @@ erro_previsao = Gauge(
 # ============================================================================
 """
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception = "Erro Desconhecido"):
+async def global_exception_handler(request: Request, exc: Exception):
     """
     Manipulador global de exceções não capturadas.
     

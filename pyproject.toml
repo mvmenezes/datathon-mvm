@@ -46,6 +46,7 @@ ruff = "*"
 mypy = "*"
 bandit = "*"
 ipykernel = "*"
+types-pyyaml = "^6.0.12.20260408"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
