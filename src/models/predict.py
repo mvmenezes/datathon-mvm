@@ -29,7 +29,7 @@ def predict(params: PredictParams):
         model.eval()
         with torch.no_grad():
             pred = model(X_torch).squeeze()
-    pred_np = pred.item().numpy().reshape(-1,1)
+    pred_np = pred.detach().cpu().numpy().reshape(-1, 1)
     dummy = np.zeros((len(pred_np),6))
     dummy[:,0] = pred_np[:,0]
     pred_real = scaler.inverse_transform(dummy)[:,0]
