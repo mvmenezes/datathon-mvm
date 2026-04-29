@@ -149,8 +149,8 @@ def inverse_values(scaler, input_data, fields):
 def _load_model(stock, model_type="simple", hidden_size=64, input_size=6, num_layers=2):
     model = ModelFactory.create(model_type, hidden_size=hidden_size, input_size=input_size, num_layers = num_layers)
     try:
-        model.load_state_dict(torch.load(MODEL_PATH+f"_{stock}_{model_type}.pth"))
-        checkpoints = torch.load(MODEL_PATH+f"lstm_{stock}_{model_type}.pth")
+        model.load_state_dict(torch.load(MODEL_PATH+f"_{stock}_{model_type}.pth", weights_only=True))
+        checkpoints = torch.load(MODEL_PATH+f"lstm_{stock}_{model_type}.pth", weights_only=True)
     except(FileNotFoundError):
         raise ModelNotTrainedException("Modelo não treinado para essa ação. Por favor, treine o modelo antes de fazer previsões.")
     model.eval()

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="1.450" timestamp="2026-04-29T15:18:53.744726-03:00" hostname="DESKTOP-THNT1QH"><testcase classname="" name="tests.test_api" time="0.000"><error message="collection failure">ImportError while importing test module 'D:\pos\tech5\datathon-grupo-MVM\tests\test_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+D:\Program Files\Python\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_api.py:2: in &lt;module&gt;
+    from src.serving.app import app
+E   ModuleNotFoundError: No module named 'src'</error></testcase></testsuite></testsuites>
