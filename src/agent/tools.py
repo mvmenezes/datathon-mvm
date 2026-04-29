@@ -371,3 +371,5 @@ def list_trained_models() -> str:
     except Exception as e:
         logger.error("Erro ao listar modelos treinados: %s", str(e))
         return f"Erro ao listar modelos treinados: {str(e)}"
+    
+    ###
