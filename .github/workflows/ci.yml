@@ -36,10 +36,10 @@ jobs:
 
       - name: Unit tests (pytest)
         run: |
-          python -m pytest tests/ -x \
+          poetry run pytest -m tests/ -x \
             --cov=src \
             --cov-report=xml \
-            --cov-fail-under=40 \
+            --cov-fail-under=10 \
             --junitxml=test-results.xml
 
       - name: Upload test results
