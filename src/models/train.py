@@ -117,7 +117,6 @@ def train_model(params: LSTMParams):
 
         forecast = inverse_values(scaler, pred_y, fields)
         real = inverse_values(scaler, y_test, fields)
-    
         """metrics = {
             "auc": roc_auc_score(y_test, pred_y),
             "precision": precision_score(y_test, pred_y, zero_division=0),

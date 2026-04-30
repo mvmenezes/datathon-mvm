@@ -35,6 +35,7 @@ def download_data(stock: str, periodo: str='6y'):
         df_dolar.rename(columns={"Close":"Dolar"}, inplace=True)
         #Faz o merge
         df_final = pd.concat([df_vale, df_dolar["Dolar"]], axis=1)
+        df_final = df_final.round(2)
         return df_final
     except(ValueError):
         raise ValueError(f"Não foi possivel recuperar os dados da ação {stock}, tente novamente com outros parâmetros")

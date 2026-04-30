@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse
 from fastapi import APIRouter
 import time
 import numpy as np
+from src.agent.rag_pipeline import run_pipeline
 from src.agent.react_agent import run_agent
 from src.features.data import download_data, recover_data_from_raw, save_data_raw
 from src.models.LSTMParams import LSTMParams
@@ -148,6 +149,14 @@ def predict_post(params: PredictParams):
 def input_llm(input: dict):
     try:
         answer = run_agent(input.get("input"))
+        return {"mensagem": answer}
+    except(ValueError) as e:
+        return JSONResponse(status_code=400, content={"erro": str(e)})
+
+@app.post("/input_llm_rag")
+def input_llm_rag(input: dict):
+    try:
+        answer = run_pipeline(str(input.get("input")))
         return {"mensagem": answer}
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})

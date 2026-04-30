@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import yfinance as yf
 from langchain_core.tools import tool
 
+from src.agent.rag_pipeline import build_rag_chain, get_or_create_vector_store, query_rag_with_context, stock_df_to_documents
 from src.features.data import recover_data_from_raw, download_data, save_data_raw
 from src.features.feature_engineering import feature_engineering, save_parquet
 from src.models import train
@@ -28,6 +29,7 @@ def get_stock_history(ticker: str) -> str:
         String com histórico de preços formatado.
     """
     try:
+     
         end   = datetime.today()
         start = end - timedelta(days=30)
 
@@ -52,7 +54,6 @@ def get_stock_history(ticker: str) -> str:
 
         logger.info("Histórico obtido para %s: %d registros", ticker, len(df))
         return summary
-
     except Exception as e:
         logger.error("Erro ao buscar histórico de %s: %s", ticker, str(e))
         return f"Erro ao buscar dados para '{ticker}': {str(e)}"
@@ -272,10 +273,10 @@ def train_stock_model(stock, epochs=100, window=10, hidden_size=64, num_layers=2
             "learning_rate": learning_rate,
             "per_training": per_training
         })
-        result = train.train_model(params)
+        train.train_model(params)
         params.model_type = "simple"
         result = train.train_model(params)
-
+        print("Treinamento concluído para ambos os modelos.")
         summary = (
             f"Stock: {stock.upper()}\n"
             f"Épocas: {epochs}\n"
@@ -284,7 +285,7 @@ def train_stock_model(stock, epochs=100, window=10, hidden_size=64, num_layers=2
             f"Número de camadas: {num_layers}\n"
             f"Taxa de aprendizado: {learning_rate}\n"
             f"Porcentagem de treinamento: {per_training * 100}%\n"
-            f"Resultado do treinamento: {result['mensagem']}"
+            f"Resultado do treinamento: {result['message']}"
         )
 
         logger.info("Modelo treinado para %s com %d épocas", stock, epochs)
@@ -333,6 +334,8 @@ def feature_engineering_tool(stock) -> str:
         df = recover_data_from_raw(stock)
         df_final = feature_engineering(df, stock)
         save_parquet(df_final, stock)
+        docs = stock_df_to_documents(df_final, stock)
+        get_or_create_vector_store(docs)
         summary = (
             f"Stock: {stock.upper()}\n"
             f"Resultado da preparação das features: Finalizado com sucesso."
@@ -372,4 +375,36 @@ def list_trained_models() -> str:
         logger.error("Erro ao listar modelos treinados: %s", str(e))
         return f"Erro ao listar modelos treinados: {str(e)}"
     
-    ###
+    
+
+# ---------------------------------------------------------------------------
+# TOOL 9 — Busca preço histórico da ação usando RAG. Esta ferramenta é uma alternativa à TOOL 1 e deve ser usada quando o agente julgar que a resposta da TOOL 1 não é suficiente para responder à pergunta do usuário, ou quando a ação tiver um modelo treinado, para verificar se a previsão do modelo faz sentido com base no histórico recente da ação.
+# ---------------------------------------------------------------------------
+@tool
+def get_stock_history_rag(stock: str) -> str:
+    """Busca os últimos 30 dias de preço de fechamento de uma ação.
+
+    Args:
+        stock: Código da ação (ex: PETR4.SA, VALE3.SA, AAPL).
+
+    Returns:
+        String com histórico de preços formatado.
+    """
+    try: 
+        query = f"Qual é o histórico de preços para a ação {stock} nos últimos 30 dias?"
+        vector_store = get_or_create_vector_store([])
+        retriever, rag_chain = build_rag_chain(vector_store=vector_store)
+        answer, contexts = query_rag_with_context(
+            retriever=retriever,
+                rag_chain=rag_chain,
+                question=query,
+            )
+        logger.info(
+                "Tool RAG executada | contextos=%d | query='%s...'",
+                len(contexts),
+                query[:60],
+            )
+        return answer
+    except Exception as e:
+        logger.error("Erro ao listar modelos treinados: %s", str(e))
+        return f"Erro ao listar modelos treinados: {str(e)}"

@@ -70,6 +70,8 @@ def create_stock_agent():
     
 
     llm   = ChatOpenAI(model=model_name, temperature=temperature)
+
+    logger.info("RAG pipeline carregado")
     model_with_tools = llm.bind_tools(tools)
     agent = create_agent(model_with_tools, tools=tools, system_prompt=SYSTEM_PROMPT)
 
