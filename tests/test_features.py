@@ -1,6 +1,5 @@
 import pandera.pandas as pa
 from pandera.pandas import DataFrameSchema, Column
-from src.features.data import  recover_data_from_raw
 from src.features.feature_engineering import feature_engineering
 import pandas as pd
 FEATURE_SCHEMA = DataFrameSchema({
