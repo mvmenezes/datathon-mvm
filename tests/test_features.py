@@ -3,7 +3,7 @@ from pandera.pandas import DataFrameSchema, Column
 from src.features.data import  recover_data_from_raw
 from src.features.feature_engineering import feature_engineering
 
-STOCK = "TESTE"
+STOCK = "VALE3.SA"
 FEATURE_SCHEMA = DataFrameSchema({
     "Date": Column(pa.DateTime, coerce=True),
     "Open": Column(float, pa.Check.gt(0)),
