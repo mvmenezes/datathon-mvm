@@ -27,7 +27,7 @@ def add_stock(stock: str):
         yaml.dump(params, f)
 
 
-def save_data(stock: str, periodo: str='6y'):
+def download_data(stock: str, periodo: str='6y'):
     try:
         df_vale = _download_data(stock, periodo)
         df_dolar = _download_data("USDBRL=X", periodo)
@@ -35,11 +35,16 @@ def save_data(stock: str, periodo: str='6y'):
         df_dolar.rename(columns={"Close":"Dolar"}, inplace=True)
         #Faz o merge
         df_final = pd.concat([df_vale, df_dolar["Dolar"]], axis=1)
-                
-        df_final.to_csv(f"data/raw/{stock}.csv", index=False)
-        add_stock(stock)
+        return df_final
     except(ValueError):
         raise ValueError(f"Não foi possivel recuperar os dados da ação {stock}, tente novamente com outros parâmetros")
+
+def save_data_raw(df: pd.DataFrame, stock: str):
+    try:
+        df.to_csv(f"data/raw/{stock}.csv", index=False)
+        add_stock(stock)
+    except(ValueError) as e:
+        raise ValueError(str(e))
 
 def recover_data_from_raw(stock: str):
     try:
@@ -73,4 +78,5 @@ def _download_data(ticker: str , per: str='6y'):
 
 if __name__ == "__main__":
     args = parse_args()
-    save_data(args.stock, '6y')
+    df = download_data(args.stock, '6y')
+    save_data_raw(df, args.stock)

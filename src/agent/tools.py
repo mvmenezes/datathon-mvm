@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import yfinance as yf
 from langchain_core.tools import tool
 
-from src.features.data import recover_data_from_raw, save_data
-from src.features.feature_engineering import feature_engineering
+from src.features.data import recover_data_from_raw, download_data, save_data_raw
+from src.features.feature_engineering import feature_engineering, save_parquet
 from src.models import train
 from src.models.PredictParams import PredictParams
 from src.models.predict import predict
@@ -305,8 +305,8 @@ def download_stock_data(stock) -> str:
         stock: Código da ação (ex: PETR4.SA, VALE3.SA, AAPL).
         """ 
     try:
-        save_data(stock, '6y')
-
+        df = download_data(stock, '6y')
+        save_data_raw(df, stock)
         summary = (
             f"Stock: {stock.upper()}\n"
             f"Resultado do download: Finalizado com sucesso."
@@ -331,8 +331,8 @@ def feature_engineering_tool(stock) -> str:
         """ 
     try:
         df = recover_data_from_raw(stock)
-        feature_engineering(df, stock)
-
+        df_final = feature_engineering(df, stock)
+        save_parquet(df_final, stock)
         summary = (
             f"Stock: {stock.upper()}\n"
             f"Resultado da preparação das features: Finalizado com sucesso."

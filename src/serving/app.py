@@ -22,14 +22,12 @@ from starlette.responses import JSONResponse
 from fastapi import APIRouter
 import time
 import numpy as np
-#from src.stocks_predict.model.PredictParams import PredictParamas
-#from ..services.ServiceStock import train_model_service, predict_service
 from src.agent.react_agent import run_agent
-from src.features.data import save_data,  recover_data_from_raw
+from src.features.data import download_data, recover_data_from_raw, save_data_raw
 from src.models.LSTMParams import LSTMParams
 from src.models.PredictParams import PredictParams
 from prometheus_client import Histogram, Gauge
-from ..features.feature_engineering import feature_engineering
+from ..features.feature_engineering import feature_engineering, save_parquet
 from src.models.train import train_model
 from src.models.predict import predict
 
@@ -76,9 +74,10 @@ def teste():
     return {"mensagem": "OK"}
 
 @app.post("/download_data")
-def download_data(stock: dict):
+def download_data_post(stock: dict):
     try:
-        save_data(str(stock.get("stock")), str(stock.get("periodo", '6y')))
+        df = download_data(str(stock.get("stock")), str(stock.get("periodo", '6y')))
+        save_data_raw(df, str(stock.get("stock")))
         return {"mensagem": f"Dados para a ação {stock} baixados com sucesso."}
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})
@@ -88,7 +87,9 @@ def download_data(stock: dict):
 def feature_engineering_post(stock: dict):
     try:
         df = recover_data_from_raw(str(stock.get("stock")))
-        feature_engineering(df, str(stock.get("stock")))
+        df_final = feature_engineering(df, str(stock.get("stock")))
+        save_parquet(df_final, str(stock.get("stock")))
+        
         return {"mensagem": f"Features para a ação {stock} criadas com sucesso."}
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})

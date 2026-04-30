@@ -22,10 +22,12 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         #Cria a estrategia de medias moveis
         df = _create_strategy(df)
-        df.to_parquet(f"data/processed/{stock}.parquet", index=False)
         return df
     except(ValueError):
         raise ValueError("Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")
+
+def save_parquet(df: pd.DataFrame, stock: str):
+    df.to_parquet(f"data/processed/{stock}.parquet", index=False)
 
 def recover_data_from_raw(stock: str):
     try:
@@ -39,6 +41,7 @@ if __name__ == "__main__":
     stock = args.stock
     try:
         df = recover_data_from_raw(stock)
-        feature_engineering(df, stock)
+        df_final = feature_engineering(df, stock)
+        save_parquet(df_final, stock)
     except(ValueError) as e:
         raise ValueError(f"Erro ao processar {stock} - {str(e)}")
