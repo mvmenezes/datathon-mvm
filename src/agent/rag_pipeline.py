@@ -495,7 +495,7 @@ def search_all_collections(
 def get_chunk_id(chunk) -> str:
     """Gera id único baseado no conteúdo + fonte + página."""
     content = f"{chunk.metadata.get('source', '')}-{chunk.metadata.get('page', 0)}-{chunk.page_content}"
-    return hashlib.md5(content.encode()).hexdigest()
+    return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
 def index_documents_safe(
     documents: list,
