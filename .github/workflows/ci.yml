@@ -35,12 +35,15 @@ jobs:
         run: poetry run bandit -r src/ -c pyproject.toml
 
       - name: Unit tests (pytest)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           poetry run pytest tests/ -x \
             --cov=src \
             --cov-report=xml \
             --cov-fail-under=10 \
             --junitxml=test-results.xml
+            
       - name: Run RAGAS evaluation
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
