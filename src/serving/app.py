@@ -16,8 +16,13 @@ Acesso:
     - Métricas: http://localhost:8000/metrics
 """
 
+from functools import wraps
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI, Request
 from prometheus_client import make_asgi_app
+from pydantic import BaseModel, field_validator
 from starlette.responses import JSONResponse
 from fastapi import APIRouter
 import time
@@ -31,6 +36,12 @@ from prometheus_client import Histogram, Gauge
 from ..features.feature_engineering import feature_engineering, save_parquet
 from src.models.train import train_model
 from src.models.predict import predict
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+import os
 
 # Criar instância da aplicação FastAPI
 app = FastAPI(
@@ -38,6 +49,91 @@ app = FastAPI(
     description="API para treinamento e predição de preços de ações usando LSTM",
     version="1.0.0"
 )
+
+
+# =========================
+# CONFIG
+# =========================
+
+SECRET_KEY = os.getenv("SECRET_KEY")  # ❗ em produção usar env var
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+app = FastAPI()
+
+# =========================
+# FAKE DB
+# =========================
+
+fake_users_db = {
+    "marcus.menezes": {
+        "username": "marcus.menezes",
+        "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$fO9di7GWMub8/18LQUjJWQ$IMGC/PQmERSI7tojq8KrP5wY1jwRqmwdSYxVXhB6xxo"  # senha: MarcusMenezes123
+    }
+}
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# =========================
+# SCHEMA DE ENTRADA
+# =========================
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+    @field_validator("password")
+    def strong_password(cls, v):
+        if len(v) < 6:
+            raise ValueError("Senha muito curta")
+        return v
+
+# =========================
+# FUNÇÃO DE HASH
+# =========================
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+# =========================
+# FUNÇÕES AUXILIARES
+# =========================
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def authenticate_user(username: str, password: str):
+    user = fake_users_db.get(username)
+    if not user:
+        return False
+    if not verify_password(password, user["hashed_password"]):
+        return False
+    return user
+
+
+def create_access_token(data: dict, expires_delta: timedelta):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token inválido",
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = fake_users_db.get(username)
+    if user is None:
+        raise credentials_exception
+    return user
 
 
 
@@ -52,14 +148,30 @@ metrics_app = make_asgi_app()
 
 # Montar aplicação de métricas no endpoint /metrics
 # Acessível em http://localhost:8000/metrics
+limiter = Limiter(key_func=get_remote_address)
 app.mount("/metrics", metrics_app)
-
+app.state.limiter = limiter
 
 # Inicializa o roteador FastAPI para definição de endpoints
 router = APIRouter()
 
+@app.post("/login")
+@limiter.limit("15/minute")
+def login(request: Request,form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Credenciais inválidas")
+
+    access_token = create_access_token(
+        data={"sub": user["username"]},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @app.get("/health")
-def teste():
+@limiter.limit("15/minute")
+def teste(request: Request,_ = Depends(get_current_user)):
     """
     Endpoint de health check para verificar disponibilidade do serviço.
     
@@ -75,7 +187,8 @@ def teste():
     return {"mensagem": "OK"}
 
 @app.post("/download_data")
-def download_data_post(stock: dict):
+@limiter.limit("15/minute")
+def download_data_post(request: Request, stock: dict, _ = Depends(get_current_user)):
     try:
         df = download_data(str(stock.get("stock")), str(stock.get("periodo", '6y')))
         save_data_raw(df, str(stock.get("stock")))
@@ -85,7 +198,8 @@ def download_data_post(stock: dict):
 
 
 @app.post("/feature_engineering")
-def feature_engineering_post(stock: dict):
+@limiter.limit("15/minute")
+def feature_engineering_post(request: Request, stock: dict, _  = Depends(get_current_user)):
     try:
         df = recover_data_from_raw(str(stock.get("stock")))
         df_final = feature_engineering(df, str(stock.get("stock")))
@@ -96,8 +210,10 @@ def feature_engineering_post(stock: dict):
         return JSONResponse(status_code=400, content={"erro": str(e)})
 
 @app.post("/train_model")
-def train_model_post(params: LSTMParams):
+@limiter.limit("15/minute")
+def train_model_post( params: LSTMParams,request: Request, _ = Depends(get_current_user)):
         start = time.time()
+        print(f"Parâmetros recebidos para treinamento: {params}")
         if not isinstance(params.epochs, int) or params.epochs <= 0:
             return JSONResponse(status_code=400, content={"erro":"O número de épocas deve ser um inteiro positivo."})
         if not isinstance(params.window, int) or params.window <= 0:
@@ -127,7 +243,8 @@ def train_model_post(params: LSTMParams):
         return {"mensagem":result}
 
 @app.post("/predict")
-def predict_post(params: PredictParams):
+@limiter.limit("15/minute")
+def predict_post(request: Request, params: PredictParams , _ = Depends(get_current_user)):
     
     with tempo_processamento_predict.time():
         if not isinstance(params.days, int) or params.days <= 0:
@@ -146,7 +263,8 @@ def predict_post(params: PredictParams):
 
 
 @app.post("/input_llm")
-def input_llm(input: dict):
+@limiter.limit("15/minute")
+def input_llm(request: Request, input: dict , _ = Depends(get_current_user)):
     try:
         answer = run_agent(input.get("input"))
         return {"mensagem": answer}
@@ -154,14 +272,23 @@ def input_llm(input: dict):
         return JSONResponse(status_code=400, content={"erro": str(e)})
 
 @app.post("/input_llm_rag")
-def input_llm_rag(input: dict):
+@limiter.limit("15/minute")
+def input_llm_rag(request: Request, input: dict, _  = Depends(get_current_user)):
     try:
         answer = run_pipeline(str(input.get("input")))
         return {"mensagem": answer}
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
 
+@app.exception_handler(RateLimitExceeded)
+def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Muitas requisições. Tente novamente depois."},
+    )
 # ============================================================================
 # MÉTRICAS PROMETHEUS - Instrumentação para Observabilidade
 # ============================================================================
@@ -220,7 +347,7 @@ erro_previsao = Gauge(
 # ============================================================================
 """
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+def global_exception_handler(request: Request, exc: Exception):
     """
     Manipulador global de exceções não capturadas.
     

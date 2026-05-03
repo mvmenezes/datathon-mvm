@@ -4,6 +4,10 @@ services:
     build: 
       context: .
       dockerfile: src/serving/Dockerfile
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - mlflow_data:/mlflow
     ports:
@@ -24,7 +28,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./configs/monitoring_config.yaml:/etc/prometheus/prometheus.yml
     depends_on:
       - stock_predict
 
@@ -39,8 +43,23 @@ services:
       - prometheus    
     volumes:
       - grafana_data:/var/lib/grafana 
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+  worker:
+    image: prefecthq/prefect:3-latest  # <- troca build: . por isso
+    command: prefect worker start --pool "default-agent-pool"
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    depends_on:
+      - prefect-server
 
-
+  pushgateway:
+    image: prom/pushgateway
+    ports:
+      - "9091:9091"
 volumes:      
   mlflow_data:
   grafana_data:

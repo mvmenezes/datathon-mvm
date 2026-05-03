@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.csv
+*.parquet
+data/
+models/
+mlruns/
+.dvc/
+.dvc/cache/

@@ -6,7 +6,7 @@ authors = [
     {name = "CURITIBA\\mmenezes", email = "mmenezes@alta-rt.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "yfinance>=0.2",
     "numpy>=1.26",
@@ -30,7 +30,16 @@ dependencies = [
     "ragas (>=0.4.3,<0.5.0)",
     "mplfinance (>=0.12.10b0,<0.13.0)",
     "langchain-chroma (>=1.1.0,<2.0.0)",
-    "google-generativeai (>=0.8.6,<0.9.0)"
+    "google-generativeai (>=0.8.6,<0.9.0)",
+    "evidently (>=0.7.21,<0.8.0)",
+    "prefect (>=3.6.29,<4.0.0)",
+    "python-jose (>=3.5.0,<4.0.0)",
+    "passlib[argon2] (>=1.7.4,<2.0.0)",
+    "python-multipart (>=0.0.27,<0.0.28)",
+    "slowapi (>=0.1.9,<0.2.0)",
+    "presidio (>=2.2.362,<3.0.0)",
+    "shap (>=0.51.0,<0.52.0)",
+    "spacy (>=3.8.14,<4.0.0)"
 ]
 
 [tool.poetry]

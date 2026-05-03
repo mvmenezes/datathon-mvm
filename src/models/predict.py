@@ -2,11 +2,13 @@
 import torch
 from sklearn.preprocessing import MinMaxScaler
 import math
+
+from src.features.feature_engineering import feature_engineering
 from .Exceptions.LSTMException import ModelNotTrainedException
 from .PredictParams import PredictParams
 from .lstm import ModelFactory
 import numpy as np
-from src.features.data import recover_data_from_processed
+from src.features.data import download_data
 model = None
 MODEL_PATH = "./data/models/lstm"
 
@@ -20,7 +22,8 @@ def inverse_values(scaler, input_data, fields):
 
 def predict(params: PredictParams):
     pred: torch.Tensor = torch.tensor([0.0])
-    last_x_days = recover_data_from_processed(str(params.stock)).tail(params.days)
+    last_x_days_raw = download_data(str(params.stock), periodo=f'{params.days}d')
+    last_x_days = feature_engineering(last_x_days_raw, str(params.stock))
     scaler , data_scaled = _scale_data(last_x_days, ["Close","Volume","Dolar","short_mm","medium_mm","large_mm", "RSI", "bb_upper_band", "bb_lower_band"])
     X_torch, _ = _create_window(data_scaled, length=3)
     

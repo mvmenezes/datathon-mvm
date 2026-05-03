@@ -1,4 +1,5 @@
 
+from sklearn.metrics import mean_absolute_error, mean_absolute_error, mean_absolute_percentage_error, mean_squared_error
 import torch
 import torch.nn as nn
 import numpy as np
@@ -13,14 +14,7 @@ from src.models.lstm import ModelFactory
 from src.features.data import recover_data_from_processed
 from pathlib import Path
 
-"""
-from sklearn.metrics import (
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
-"""
+
 
 MODEL_CONFIG = Path("configs/model_config.yaml")
 
@@ -117,14 +111,13 @@ def train_model(params: LSTMParams):
 
         forecast = inverse_values(scaler, pred_y, fields)
         real = inverse_values(scaler, y_test, fields)
-        """metrics = {
-            "auc": roc_auc_score(y_test, pred_y),
-            "precision": precision_score(y_test, pred_y, zero_division=0),
-            "recall": recall_score(y_test, pred_y, zero_division=0),
-            "f1": f1_score(y_test, pred_y, zero_division=0),
+        metrics = {
+            "mean_absolute_error": mean_absolute_error(y_test, pred_y),
+            "mean_squared_error": mean_squared_error(y_test, pred_y),
+            "mean_absolute_percentage_error": mean_absolute_percentage_error(y_test, pred_y)
         }
         mlflow.log_metrics(metrics)
-        """
+        
         return {
             "message": "Modelo treinado com sucesso. ",
             "stock": params.stock,

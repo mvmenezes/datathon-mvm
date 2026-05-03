@@ -1,0 +1,7 @@
+deployments:
+  - name: drift-monitoring
+    entrypoint: evaluation/drift_eval.py:drift_evaluation_pipeline
+    schedules:
+      - cron: "0 6 * * *"
+    work_pool:
+      name: default

@@ -1,0 +1,76 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  metric_name_validation_scheme: utf8
+  scrape_native_histograms: false
+runtime:
+  gogc: 75
+alerting:
+  alertmanagers:
+  - follow_redirects: true
+    enable_http2: true
+    scheme: http
+    timeout: 10s
+    api_version: v2
+    static_configs:
+    - targets: []
+scrape_configs:
+- job_name: prometheus
+  honor_timestamps: true
+  track_timestamps_staleness: false
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  scrape_protocols:
+  - OpenMetricsText1.0.0
+  - OpenMetricsText0.0.1
+  - PrometheusText1.0.0
+  - PrometheusText0.0.4
+  scrape_native_histograms: false
+  always_scrape_classic_histograms: false
+  convert_classic_histograms_to_nhcb: false
+  metrics_path: /metrics
+  scheme: http
+  enable_compression: true
+  metric_name_validation_scheme: utf8
+  metric_name_escaping_scheme: allow-utf-8
+  follow_redirects: true
+  enable_http2: true
+  static_configs:
+  - targets:
+    - localhost:9090
+    labels:
+      app: prometheus
+- job_name: fastapi
+  honor_timestamps: true
+  track_timestamps_staleness: false
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  scrape_protocols:
+  - OpenMetricsText1.0.0
+  - OpenMetricsText0.0.1
+  - PrometheusText1.0.0
+  - PrometheusText0.0.4
+  scrape_native_histograms: false
+  always_scrape_classic_histograms: false
+  convert_classic_histograms_to_nhcb: false
+  metrics_path: /metrics
+  scheme: http
+  enable_compression: true
+  metric_name_validation_scheme: utf8
+  metric_name_escaping_scheme: allow-utf-8
+  follow_redirects: true
+  enable_http2: true
+  static_configs:
+  - targets:
+    - host.docker.internal:8000
+    labels:
+      app: fastapi
+  - job_name: "pushgateway"
+    static_configs:
+      - targets: ["pushgateway:9091"]
+    honor_labels: true  # importante — preserva labels do job
+otlp:
+  translation_strategy: UnderscoreEscapingWithSuffixes
+  label_name_underscore_sanitization: true
+  label_name_preserve_multiple_underscores: true

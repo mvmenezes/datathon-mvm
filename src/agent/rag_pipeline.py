@@ -27,10 +27,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from src.security.guardrails import InputGuardrail, OutputGuardrail
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-
+K = 5  # número de chunks a recuperar por query
 EMBEDDING = OpenAIEmbeddings(
         model="text-embedding-3-small",  # Mais barato, suficiente para o Datathon
     )
@@ -254,6 +256,7 @@ def build_rag_chain(
         >>> retriever, chain = build_rag_chain(vector_store)
     """
     # RETRIEVER — busca por similaridade semântica
+    K = k
     retriever = vector_store.as_retriever(
         search_type="similarity",
         search_kwargs={"k": k},
@@ -330,23 +333,30 @@ def query_rag_with_context(
         >>> print(answer)
         >>> print(f"Contextos usados: {len(contexts)}")
     """
+
+    validated, reason = InputGuardrail().validate(question)
+    if not validated:
+        logger.warning("Input inválido: %s", reason)
+        return "Input inválido.",[]
+
     # Recupera chunks separadamente para capturar os contextos
     if collection_name != "langchain":
         docs_retrieved = retriever.invoke(question)
     else:
-        docs_retrieved = search_all_collections(question, persist_dir="./data/chroma_db", k=4)
+        docs_retrieved = search_all_collections(question, persist_dir="./data/chroma_db")
 
     contexts = [doc.page_content for doc in docs_retrieved]
 
     # Gera a resposta com a chain completa
     answer = rag_chain.invoke(question)
 
+    answer_sanitized = OutputGuardrail().sanitize(answer)
     logger.info(
         "Query processada | contextos=%d | pergunta='%s...'",
         len(contexts),
         question[:60],
     )
-    return answer, contexts
+    return answer_sanitized, contexts
 
 
 # ---------------------------------------------------------------------------
@@ -453,12 +463,10 @@ def run_pipeline_llm_judge(input: str):
 def search_all_collections(
     query: str,
     persist_dir: str,
-    k: int = 4,
 ) -> list[Document]:
     """Busca em todas as collections e retorna os melhores resultados."""
 
     all_results = []
-
     client = chromadb.PersistentClient(path=persist_dir)
     collections = client.list_collections()
     for col in collections:
@@ -468,7 +476,7 @@ def search_all_collections(
             embedding_function=EMBEDDING,
             collection_name=col.name,
         )
-        results = vectorstore.similarity_search_with_score(query, k=k)
+        results = vectorstore.similarity_search_with_score(query, k=K)
         print(f"  Resultados encontrados: {len(results)}")
         print(results)
         for doc, score in results:
@@ -480,7 +488,7 @@ def search_all_collections(
     all_results.sort(key=lambda x: x[1])
 
     # retorna os k melhores do total
-    top_docs = [doc for doc, _ in all_results[:k]]
+    top_docs = [doc for doc, _ in all_results[:K]]
     return top_docs
 
 
@@ -541,7 +549,7 @@ def index_documents_safe(
     return vectorstore
 
 
-def debug_rag_pipeline(retriever, rag_chain, question: str, expected_answer: str):
+def debug_rag_pipeline( rag_chain, question: str, expected_answer: str):
     """Diagnóstico em camadas — identifica onde o RAG está falhando."""
 
     print(f"\n{'='*60}")

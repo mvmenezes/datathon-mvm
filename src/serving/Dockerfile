@@ -26,6 +26,7 @@ ENV POETRY_HTTP_TIMEOUT=120
  # instalar dependências
 RUN poetry install --no-interaction --no-ansi --no-root
 RUN poetry add torch --source pytorch-cpu
+RUN poetry run python -m spacy download pt_core_news_lg
 # copiar código
 COPY . .
 

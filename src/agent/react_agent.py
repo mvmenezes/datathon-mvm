@@ -6,6 +6,7 @@ Referência: Yao et al. (2023) — ReAct: Synergizing Reasoning and Acting
 import logging
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
+from src.security.guardrails import InputGuardrail, OutputGuardrail
 from src.agent.tools import download_stock_data, feature_engineering_tool, get_stock_history, get_stock_news, list_trained_models, predict_stock_price, train_stock_model
 from dotenv import load_dotenv
 from datetime import datetime
@@ -74,9 +75,17 @@ def run_agent(user_input):
     Returns:
         Resposta final do agente após usar as ferramentas.
     """
+    validated, reason = InputGuardrail().validate(user_input)
+    if not validated:
+        logger.warning("Input inválido: %s", reason)
+        return "Input inválido.",[]
     agent = create_stock_agent()
+    
     response = agent.invoke({"messages": [{"role": "user", "content": user_input}]})
-    return response["messages"][-1].content
+
+    print(response["messages"][-1].content)
+    answer_sanitized = OutputGuardrail().sanitize(response["messages"][-1].content)
+    return answer_sanitized
 
 # ---------------------------------------------------------------------------
 # EXEMPLO DE USO

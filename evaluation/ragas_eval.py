@@ -105,7 +105,6 @@ async def run_ragas_evaluation(
         mlflow.set_tag("evaluation_type", "ragas")
         mlflow.set_tag("golden_set_size", len(golden_set))
 
-    # ✅ CORRIGIDO: print com % não funciona assim
     logger.info("RAGAS concluído: %s", metrics)
     return metrics
 
