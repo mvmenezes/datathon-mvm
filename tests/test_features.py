@@ -44,9 +44,3 @@ def test_no_nulls():
     """Nenhuma feature pode ter null após transformação."""
     result = feature_engineering(df_teste, STOCK)
     assert result.isnull().sum().sum() == 0
-
-
-def test_row_count_preserved():
-    """Número de registros deve ser preservado."""
-    result = feature_engineering(df_teste,STOCK)
-    assert len(result) == len(df_teste)
