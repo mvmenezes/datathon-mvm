@@ -1,0 +1,102 @@
+[
+  {
+    "query": "Qual foi o preço de abertura de PETR4 no dia 02/01/2025?",
+    "expected_answer": "O preço de abertura de PETR4 no dia 02/01/2025 foi R$32.27.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de fechamento de PETR4 no dia 02/01/2025?",
+    "expected_answer": "O preço de fechamento de PETR4 no dia 02/01/2025 foi R$32.58.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço máximo de PETR4 no dia 02/01/2025?",
+    "expected_answer": "O preço máximo de PETR4 no dia 02/01/2025 foi R$32.87.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço mínimo de PETR4 no dia 02/01/2025?",
+    "expected_answer": "O preço mínimo de PETR4 no dia 02/01/2025 foi R$32.07.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o volume de PETR4 no dia 02/01/2025?",
+    "expected_answer": "O volume de PETR4 no dia 02/01/2025 foi 30046800.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de abertura de PETR4 no dia 03/01/2025?",
+    "expected_answer": "O preço de abertura de PETR4 no dia 03/01/2025 foi R$32.68.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de fechamento de PETR4 no dia 03/01/2025?",
+    "expected_answer": "O preço de fechamento de PETR4 no dia 03/01/2025 foi R$32.24.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço máximo de PETR4 no dia 03/01/2025?",
+    "expected_answer": "O preço máximo de PETR4 no dia 03/01/2025 foi R$32.82.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço mínimo de PETR4 no dia 03/01/2025?",
+    "expected_answer": "O preço mínimo de PETR4 no dia 03/01/2025 foi R$32.19.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o volume de PETR4 no dia 03/01/2025?",
+    "expected_answer": "O volume de PETR4 no dia 03/01/2025 foi 23314200.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de abertura de PETR4 no dia 06/01/2025?",
+    "expected_answer": "O preço de abertura de PETR4 no dia 06/01/2025 foi R$32.43.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de fechamento de PETR4 no dia 06/01/2025?",
+    "expected_answer": "O preço de fechamento de PETR4 no dia 06/01/2025 foi R$32.09.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço máximo de PETR4 no dia 06/01/2025?",
+    "expected_answer": "O preço máximo de PETR4 no dia 06/01/2025 foi R$32.51.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço mínimo de PETR4 no dia 06/01/2025?",
+    "expected_answer": "O preço mínimo de PETR4 no dia 06/01/2025 foi R$31.95.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o volume de PETR4 no dia 06/01/2025?",
+    "expected_answer": "O volume de PETR4 no dia 06/01/2025 foi 23760200.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de abertura de PETR4 no dia 07/01/2025?",
+    "expected_answer": "O preço de abertura de PETR4 no dia 07/01/2025 foi R$32.39.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço de fechamento de PETR4 no dia 07/01/2025?",
+    "expected_answer": "O preço de fechamento de PETR4 no dia 07/01/2025 foi R$32.77.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço máximo de PETR4 no dia 07/01/2025?",
+    "expected_answer": "O preço máximo de PETR4 no dia 07/01/2025 foi R$33.01.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço máximo de PETR4 no dia 07/01/2025?",
+    "expected_answer": "O preço máximo de PETR4 no dia 07/01/2025 foi R$33.01.",
+    "category": "dado_pontual"
+  },
+  {
+    "query": "Qual foi o preço mínimo de PETR4 no dia 13/01/2025?",
+    "expected_answer": "O preço mínimo de PETR4 no dia 13/01/2025 foi R$32.76.",
+    "category": "dado_pontual"
+  }
+]

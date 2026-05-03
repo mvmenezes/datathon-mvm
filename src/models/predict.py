@@ -21,7 +21,7 @@ def inverse_values(scaler, input_data, fields):
 def predict(params: PredictParams):
     pred: torch.Tensor = torch.tensor([0.0])
     last_x_days = recover_data_from_processed(str(params.stock)).tail(params.days)
-    scaler , data_scaled = _scale_data(last_x_days, ["Close","Volume","Dolar","short_mm","medium_mm","large_mm"])
+    scaler , data_scaled = _scale_data(last_x_days, ["Close","Volume","Dolar","short_mm","medium_mm","large_mm", "RSI", "bb_upper_band", "bb_lower_band"])
     X_torch, _ = _create_window(data_scaled, length=3)
     
     model, checkpoints = _load_model(params.stock, params.model_type)
@@ -30,7 +30,7 @@ def predict(params: PredictParams):
         with torch.no_grad():
             pred = model(X_torch).squeeze()
     pred_np = pred.numpy().reshape(-1,1)
-    dummy = np.zeros((len(pred_np),6))
+    dummy = np.zeros((len(pred_np),9))
     dummy[:,0] = pred_np[:,0]
     pred_real = scaler.inverse_transform(dummy)[:,0]
     return {
@@ -40,7 +40,7 @@ def predict(params: PredictParams):
         
     }
 
-def _load_model(stock, model_type="simple", hidden_size=64, input_size=6, num_layers=2):
+def _load_model(stock, model_type="simple", hidden_size=64, input_size=9, num_layers=2):
     model = ModelFactory.create(model_type, hidden_size=hidden_size, input_size=input_size, num_layers = num_layers)
     try:
         state_dict = torch.load(MODEL_PATH+f"_{stock}_{model_type}.pth", weights_only=True)

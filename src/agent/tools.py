@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import yfinance as yf
 from langchain_core.tools import tool
 
-from src.agent.rag_pipeline import build_rag_chain, get_or_create_vector_store, query_rag_with_context, stock_df_to_documents
+from src.agent.rag_pipeline import build_rag_chain, get_or_create_vector_store, query_rag_with_context, stock_news_to_documents, upsert_documents
 from src.features.data import recover_data_from_raw, download_data, save_data_raw
 from src.features.feature_engineering import feature_engineering, save_parquet
 from src.models import train
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # TOOL 1 — Busca preço histórico da ação
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="buscar_historico_de_precos")
 def get_stock_history(ticker: str) -> str:
     """Busca os últimos 30 dias de preço de fechamento de uma ação.
 
@@ -60,97 +60,10 @@ def get_stock_history(ticker: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# TOOL 2 — Calcula indicadores técnicos
-# ---------------------------------------------------------------------------
-
-@tool
-def calculate_technical_indicators(ticker: str) -> str:
-    """Calcula indicadores técnicos clássicos para uma ação.
-
-    Calcula: RSI, Média Móvel 7d e 21d, e Bandas de Bollinger.
-
-    Args:
-        ticker: Código da ação (ex: PETR4.SA, VALE3.SA, AAPL).
-
-    Returns:
-        String com indicadores técnicos e interpretação.
-    """
-    try:
-        stock = yf.Ticker(ticker.strip().upper())
-        df    = stock.history(period="60d")
-
-        if df.empty:
-            return f"Nenhum dado encontrado para '{ticker}'."
-
-        close = df["Close"]
-
-        # Médias móveis
-        ma7  = close.rolling(window=7).mean().iloc[-1]
-        ma21 = close.rolling(window=21).mean().iloc[-1]
-
-        # RSI (14 períodos)
-        delta = close.diff()
-        gain  = delta.clip(lower=0).rolling(14).mean()
-        loss  = (-delta.clip(upper=0)).rolling(14).mean()
-        rs    = gain / loss
-        rsi   = (100 - (100 / (1 + rs))).iloc[-1]
-
-        # Bandas de Bollinger (20 períodos)
-        ma20       = close.rolling(20).mean()
-        std20      = close.rolling(20).std()
-        upper_band = (ma20 + 2 * std20).iloc[-1]
-        lower_band = (ma20 - 2 * std20).iloc[-1]
-        current    = close.iloc[-1]
-
-        # Interpretações
-        rsi_signal = (
-            "SOBRECOMPRADO — possível queda"    if rsi > 70
-            else "SOBREVENDIDO — possível alta" if rsi < 30
-            else "NEUTRO"
-        )
-
-        trend_signal = (
-            "ALTA — MA7 acima de MA21"
-            if ma7 > ma21
-            else "BAIXA — MA7 abaixo de MA21"
-        )
-
-        bb_signal = (
-            "Preço próximo da banda SUPERIOR — resistência"  if current > upper_band * 0.98
-            else "Preço próximo da banda INFERIOR — suporte" if current < lower_band * 1.02
-            else "Preço dentro das bandas — sem sinal claro"
-        )
-
-        result = (
-            f"Indicadores Técnicos — {ticker.upper()}\n"
-            f"{'─' * 40}\n"
-            f"Preço atual:     R$ {current:.2f}\n\n"
-            f"Médias Móveis:\n"
-            f"  MA7:  R$ {ma7:.2f}\n"
-            f"  MA21: R$ {ma21:.2f}\n"
-            f"  Sinal: {trend_signal}\n\n"
-            f"RSI (14):\n"
-            f"  Valor: {rsi:.1f}\n"
-            f"  Sinal: {rsi_signal}\n\n"
-            f"Bandas de Bollinger:\n"
-            f"  Superior: R$ {upper_band:.2f}\n"
-            f"  Inferior: R$ {lower_band:.2f}\n"
-            f"  Sinal: {bb_signal}"
-        )
-
-        logger.info("Indicadores calculados para %s: RSI=%.1f", ticker, rsi)
-        return result
-
-    except Exception as e:
-        logger.error("Erro ao calcular indicadores de %s: %s", ticker, str(e))
-        return f"Erro ao calcular indicadores para '{ticker}': {str(e)}"
-
-
-# ---------------------------------------------------------------------------
 # TOOL 3 — Busca notícias recentes da empresa
 # ---------------------------------------------------------------------------
 
-@tool
+@tool(name_or_callable="buscar_noticias")
 def get_stock_news(ticker: str) -> str:
     """Busca as notícias mais recentes relacionadas a uma ação.
 
@@ -183,9 +96,8 @@ def get_stock_news(ticker: str) -> str:
             )
 
             if isinstance(pub_time, (int, float)):
-                published = datetime.fromtimestamp(pub_time).strftime("%Y-%m-%d %H:%M")
+                published = datetime.fromtimestamp(pub_time).strftime("%d-%m-%Y")
             elif isinstance(pub_time, str):
-                # ISO 8601: "2025-04-28T12:00:00Z"
                 published = pub_time[:16].replace("T", " ")
             else:
                 published = "N/A"
@@ -194,6 +106,9 @@ def get_stock_news(ticker: str) -> str:
                 content.get("canonicalUrl", {}).get("url")
                 or article.get("link", "N/A")
             )
+            content_created = f"No dia {published}, foi publicado uma a notícia que impacta de alguma forma a ação {ticker} com o título '{title}' foi publicada pela fonte {publisher}. O conteúdo da notícia é: {content.get('description', 'Sem descrição disponível.')}. O link da notícia é {link}."
+            doc = stock_news_to_documents(content_created, ticker, published)
+            upsert_documents(doc,ticker)
 
             result += (
                 f"{i}. {title}\n"
@@ -213,7 +128,7 @@ def get_stock_news(ticker: str) -> str:
 # ---------------------------------------------------------------------------
 # TOOL 4 — Ferramenta principal para previsão de preço de ações
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="prever_preco_da_acao")
 def predict_stock_price(stock, days=7,  model_type="complex") -> str:
     """Ferramenta principal para previsão de preço de ações. Antes de fazer uma previsão, o agente deve realizar o download do histórico e treinar o modelo usando a API de treinamento. Depois, pode usar esta ferramenta para obter a previsão para os próximos dias.
 
@@ -246,7 +161,7 @@ def predict_stock_price(stock, days=7,  model_type="complex") -> str:
 # ---------------------------------------------------------------------------
 # TOOL 5 — Ferramenta principal para treinar o modelo de previsão de ações
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="treinar_modelo_de_previsao")
 def train_stock_model(stock, epochs=100, window=10, hidden_size=64, num_layers=2, learning_rate=0.001, per_training=0.8) -> str:
     """Ferramenta para treinar o modelo de previsão de ações. O agente deve usar esta ferramenta quando a ação não tiver um modelo treinado.
 
@@ -298,7 +213,7 @@ def train_stock_model(stock, epochs=100, window=10, hidden_size=64, num_layers=2
 # ---------------------------------------------------------------------------
 # TOOL 6 — Ferramenta para fazer o download do histórico de preços e indicadores técnicos, para preparar os dados para o treinamento do modelo. O agente deve usar esta ferramenta antes de usar a ferramenta de treinamento, caso os dados ainda não tenham sido baixados.
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="baixar_dados_historicos")
 def download_stock_data(stock) -> str:
     """Ferramenta para fazer o download do histórico de preços e indicadores técnicos, para preparar os dados para o treinamento do modelo. O agente deve usar esta ferramenta antes de usar a ferramenta sempre que a ação não tiver dados disponíveis de acordo com a ferramenta de listagem de modelos treinados.
 
@@ -323,7 +238,7 @@ def download_stock_data(stock) -> str:
 # ---------------------------------------------------------------------------
 # TOOL 7 — Ferramenta para preparar as features de treinamento.
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="prepare_features")
 def feature_engineering_tool(stock) -> str:
     """Ferramenta para preparar as features de treinamento. O agente deve usar esta ferramenta depis de realizar o download e antes de usar a ferramenta de treinamento, caso as features ainda não tenham sido preparadas.
 
@@ -334,8 +249,6 @@ def feature_engineering_tool(stock) -> str:
         df = recover_data_from_raw(stock)
         df_final = feature_engineering(df, stock)
         save_parquet(df_final, stock)
-        docs = stock_df_to_documents(df_final, stock)
-        get_or_create_vector_store(docs)
         summary = (
             f"Stock: {stock.upper()}\n"
             f"Resultado da preparação das features: Finalizado com sucesso."
@@ -351,7 +264,7 @@ def feature_engineering_tool(stock) -> str:
 # ---------------------------------------------------------------------------
 # TOOL 8 — Ferramenta para listar os modelos treinados disponíveis.
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="listar_modelos_treinados")
 def list_trained_models() -> str:
     """Ferramenta para listar os modelos treinados disponíveis. Caso não encontre a ação ou o modelo solicitado, o agente deve usar a ferramenta para fazer download.
 
@@ -380,7 +293,7 @@ def list_trained_models() -> str:
 # ---------------------------------------------------------------------------
 # TOOL 9 — Busca preço histórico da ação usando RAG. Esta ferramenta é uma alternativa à TOOL 1 e deve ser usada quando o agente julgar que a resposta da TOOL 1 não é suficiente para responder à pergunta do usuário, ou quando a ação tiver um modelo treinado, para verificar se a previsão do modelo faz sentido com base no histórico recente da ação.
 # ---------------------------------------------------------------------------
-@tool
+@tool(name_or_callable="buscar_historico_de_precos_com_rag")
 def get_stock_history_rag(stock: str) -> str:
     """Busca os últimos 30 dias de preço de fechamento de uma ação.
 
@@ -392,7 +305,7 @@ def get_stock_history_rag(stock: str) -> str:
     """
     try: 
         query = f"Qual é o histórico de preços para a ação {stock} nos últimos 30 dias?"
-        vector_store = get_or_create_vector_store([])
+        vector_store = get_or_create_vector_store(collection_name=stock)
         retriever, rag_chain = build_rag_chain(vector_store=vector_store)
         answer, contexts = query_rag_with_context(
             retriever=retriever,

@@ -15,12 +15,13 @@ import json
 import logging
 import os
 from typing import Any
-
+import chromadb
+from langchain_chroma import Chroma
+import hashlib
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
@@ -30,6 +31,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+EMBEDDING = OpenAIEmbeddings(
+        model="text-embedding-3-small",  # Mais barato, suficiente para o Datathon
+    )
 # ---------------------------------------------------------------------------
 # EMBEDDING — Etapa 1: converter dados em Documents indexáveis
 # ---------------------------------------------------------------------------
@@ -51,7 +55,7 @@ def stock_df_to_documents(df: pd.DataFrame, ticker: str) -> list[Document]:
         >>> df = pd.read_csv("data/processed/stock_data.csv")
         >>> docs = stock_df_to_documents(df, ticker="PETR4")
     """
-    required_cols = {"Date","Open","High","Low","Close","Volume"}
+    required_cols = {"Date","Close","Volume","Dolar","short_mm","medium_mm","large_mm", "RSI", "bb_upper_band", "bb_lower_band"}
     missing = required_cols - set(df.columns)
     if missing:
         raise ValueError(f"DataFrame faltando colunas: {missing}")
@@ -62,12 +66,16 @@ def stock_df_to_documents(df: pd.DataFrame, ticker: str) -> list[Document]:
 
         fomated_date = pd.to_datetime(row["Date"]).strftime("%d/%m/%Y")
         content = f"""
-        No dia {fomated_date}, a ação {ticker} apresentou os seguintes dados de negociação:
-O preço de abertura foi de R$ {row['Open']:.2f} e o preço de fechamento foi de R$ {row['Close']:.2f} (close). 
-Durante o pregão, a máxima atingiu R$ {row['High']:.2f} e a mínima foi de R$ {row['Low']:.2f}.
-O volume negociado no dia foi de {int(row['Volume']):,} ações.
-A variação diária foi de {daily_change:.2f}%, indicando uma queda no preço (movimento de baixa). 
-A amplitude do dia (diferença entre máxima e mínima) foi de R$ {row['High'] - row['Low']:.2f}.""".strip()
+        No dia {fomated_date}, a ação {ticker} apresentou:
+A abertura foi de R$ {row['Open']:.2f} e o fechamento foi de R$ {row['Close']:.2f} (close).
+A máxima atingiu R$ {row['High']:.2f} e a mínima foi R$ {row['Low']:.2f}.
+O volume negociado foi de {int(row['Volume']):,} ações.
+A variação diária foi de {daily_change:.2f}%.
+A amplitude do dia foi de R$ {row['High'] - row['Low']:.2f}.
+O indicador de RSI foi de {row["RSI"]}
+O indicador de Bandas de Bolliner ficou entre {row["bb_lower_band"]:.2f} e {row["bb_upper_band"]:.2f}
+O dolar foi de R$ {row["Dolar"]:.2f}
+""".strip()
 
         documents.append(Document(
             page_content=content,
@@ -84,6 +92,24 @@ A amplitude do dia (diferença entre máxima e mínima) foi de R$ {row['High'] -
         len(documents),
         ticker,
     )
+    return documents
+
+def stock_news_to_documents(content: str, ticker: str, date: str) -> list[Document]:
+
+
+    documents = []
+
+
+    documents.append(Document(
+            page_content=content,
+            metadata={
+                "ação": ticker,
+                "data": date
+            },
+        ))
+
+    logger.info(
+        f"Notícia sobre {ticker} convertida em Document | data: {date}")
     return documents
 
 
@@ -128,10 +154,8 @@ Resumo: {item.get('summary', '')}
 # ---------------------------------------------------------------------------
 
 def build_vector_store(
-    documents: list[Document],
-    persist_dir: str = "./data/chroma_db",
-    chunk_size: int = 500,
-    chunk_overlap: int = 50,
+    collection_name: str = "langchain",
+    persist_dir: str = "./data/chroma_db"
 ) -> Chroma:
     """Indexa Documents no Chroma com embeddings da OpenAI.
 
@@ -151,33 +175,19 @@ def build_vector_store(
         >>> docs = stock_df_to_documents(df, "PETR4")
         >>> vector_store = build_vector_store(docs)
     """
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small",  # Mais barato, suficiente para o Datathon
-    )
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-    )
-    chunks = splitter.split_documents(documents)
 
-    logger.info(
-        "Indexando %d chunks no Chroma (persist_dir=%s)...",
-        len(chunks),
-        persist_dir,
-    )
+    vector_store = Chroma(
+    persist_directory=persist_dir,
+    embedding_function=EMBEDDING,
+    collection_name=collection_name)
 
-    vector_store = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=persist_dir,
-    )
 
     logger.info("Vector store criado com sucesso em %s", persist_dir)
     return vector_store
 
 
-def load_vector_store(persist_dir: str = "./data/chroma_db") -> Chroma:
+def load_vector_store(persist_dir: str = "./data/chroma_db", collection_name: str = "langchain") -> Chroma:
     """Carrega vector store já existente em disco.
 
     Use após a primeira indexação — evita reindexar desnecessariamente.
@@ -191,11 +201,11 @@ def load_vector_store(persist_dir: str = "./data/chroma_db") -> Chroma:
     Example:
         >>> vector_store = load_vector_store()
     """
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     vector_store = Chroma(
         persist_directory=persist_dir,
-        embedding_function=embeddings,
+        embedding_function=EMBEDDING,
+        collection_name=collection_name,
     )
 
     logger.info("Vector store carregado de %s", persist_dir)
@@ -203,13 +213,9 @@ def load_vector_store(persist_dir: str = "./data/chroma_db") -> Chroma:
 
 
 def upsert_documents(
-    vector_store: Chroma,
-    new_documents: list[Document],
+    new_documents: list[Document], collection_name: str = "langchain",
 ) -> None:
     """Adiciona novos Documents ao vector store de forma incremental.
-
-    NUNCA deletar e recriar o store inteiro — isso cria janela de indisponibilidade.
-    Sempre usar upsert para atualizar incrementalmente (GAP 03 do Datathon).
 
     Args:
         vector_store: Vector store Chroma existente.
@@ -218,7 +224,8 @@ def upsert_documents(
     Example:
         >>> upsert_documents(vector_store, novos_docs)
     """
-    vector_store.add_documents(new_documents)
+
+    index_documents_safe(new_documents, collection_name )
     logger.info("Upsert: %d novos Documents adicionados ao vector store", len(new_documents))
 
 
@@ -228,9 +235,9 @@ def upsert_documents(
 
 def build_rag_chain(
     vector_store: Chroma,
-    k: int = 5,
+    k: int = 4,
     model_name: str = "gpt-4o-mini",
-    temperature: float = 0.0,
+    temperature: float = 0.0
 ) -> tuple[Any, Any]:
     """Constrói a chain RAG completa: retriever + prompt + LLM.
 
@@ -258,13 +265,12 @@ def build_rag_chain(
         Responda com base EXCLUSIVAMENTE nos dados fornecidos abaixo.
         Se os dados não forem suficientes para responder com precisão, diga claramente.
         Nunca invente valores, datas ou tendências que não estejam no contexto.
-
+        Responda de forma objetiva, sem explicações longas.
         Dados históricos recuperados:
         {context}
 
         Pergunta do analista: {question}
-
-        Análise fundamentada:""")
+""")
 
     # GENERATOR — LLM que lê contexto e gera resposta
     llm = ChatOpenAI(
@@ -304,6 +310,7 @@ def query_rag_with_context(
     retriever: Any,
     rag_chain: Any,
     question: str,
+    collection_name: str = "langchain",
 ) -> tuple[str, list[str]]:
     """Executa query no pipeline RAG e retorna resposta + contextos usados.
 
@@ -324,7 +331,11 @@ def query_rag_with_context(
         >>> print(f"Contextos usados: {len(contexts)}")
     """
     # Recupera chunks separadamente para capturar os contextos
-    docs_retrieved = retriever.invoke(question)
+    if collection_name != "langchain":
+        docs_retrieved = retriever.invoke(question)
+    else:
+        docs_retrieved = search_all_collections(question, persist_dir="./data/chroma_db", k=4)
+
     contexts = [doc.page_content for doc in docs_retrieved]
 
     # Gera a resposta com a chain completa
@@ -373,8 +384,7 @@ def load_golden_set(golden_set_path: str) -> list[dict]:
     logger.info("Golden set carregado: %d pares", len(golden_set))
     return golden_set
 
-def get_or_create_vector_store(
-    documents: list[Document],
+def get_or_create_vector_store(collection_name: str = "langchain",
     persist_dir: str = "./data/chroma_db",
 ) -> Chroma:
     """Carrega o store se já existe, cria do zero se não existe.
@@ -388,14 +398,16 @@ def get_or_create_vector_store(
     Returns:
         Vector store pronto para uso.
     """
+    
     if os.path.exists(persist_dir) and os.listdir(persist_dir):
         # Store já existe — só carrega
         logger.info("Vector store encontrado em %s — carregando.", persist_dir)
-        return load_vector_store(persist_dir)
+        return load_vector_store(persist_dir,collection_name)
+
     else:
         # Primeira vez — cria do zero
         logger.info("Vector store não encontrado — criando em %s.", persist_dir)
-        return build_vector_store(documents, persist_dir)
+        return build_vector_store(persist_dir=persist_dir, collection_name=collection_name)
     
 def run_pipeline(input: str) -> str:
     """Executa o Pipeline RAG com a entrada do usuário.
@@ -411,10 +423,161 @@ def run_pipeline(input: str) -> str:
         >>> print(answer)
     """
 
-    vector_store = get_or_create_vector_store([])
+    vector_store = get_or_create_vector_store()
     retriever, rag_chain = build_rag_chain(vector_store)
     answer, _ = query_rag_with_context(retriever, rag_chain, input)
     return answer
+
+
+def run_pipeline_llm_judge(input: str):
+    """Executa o Pipeline RAG com a entrada do usuário.
+
+    Args:
+        input: Pergunta ou comando do usuário.
+
+    Returns:
+        Resposta gerada pelo pipeline.
+
+    Example:
+        >>> answer = run_agent("Qual é a previsão para PETR4 na próxima semana?")
+        >>> print(answer)
+    """
+
+    vector_store = get_or_create_vector_store()
+    retriever, rag_chain = build_rag_chain(vector_store)
+    answer, contexts = query_rag_with_context(retriever, rag_chain, input)
+    return   answer, contexts   
+
+
+
+def search_all_collections(
+    query: str,
+    persist_dir: str,
+    k: int = 4,
+) -> list[Document]:
+    """Busca em todas as collections e retorna os melhores resultados."""
+
+    all_results = []
+
+    client = chromadb.PersistentClient(path=persist_dir)
+    collections = client.list_collections()
+    for col in collections:
+        print(f"Buscando na collection: {col.name}")
+        vectorstore = Chroma(
+            persist_directory=persist_dir,
+            embedding_function=EMBEDDING,
+            collection_name=col.name,
+        )
+        results = vectorstore.similarity_search_with_score(query, k=k)
+        print(f"  Resultados encontrados: {len(results)}")
+        print(results)
+        for doc, score in results:
+            doc.metadata["collection"] = col.name  # rastreia a origem
+            doc.metadata["score"] = score
+            all_results.append((doc, score))
+
+    # ordena por score (menor distância = mais relevante no ChromaDB)
+    all_results.sort(key=lambda x: x[1])
+
+    # retorna os k melhores do total
+    top_docs = [doc for doc, _ in all_results[:k]]
+    return top_docs
+
+
+
+
+
+#-------------------------------------------------------------------------------------------------
+
+
+
+
+def get_chunk_id(chunk) -> str:
+    """Gera id único baseado no conteúdo + fonte + página."""
+    content = f"{chunk.metadata.get('source', '')}-{chunk.metadata.get('page', 0)}-{chunk.page_content}"
+    return hashlib.md5(content.encode()).hexdigest()
+
+def index_documents_safe(
+    documents: list,
+    collection_name: str,
+    chunk_size: int = 512,
+    chunk_overlap: int = 0,
+) -> Chroma:
+    """Indexa documentos sem duplicar — idempotente."""
+
+    vectorstore = get_or_create_vector_store(collection_name=collection_name)
+
+    # ids já existentes no índice
+    existing = set(vectorstore.get()["ids"])
+    print(f"Chunks já indexados: {len(existing)}")
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    chunks = splitter.split_documents(documents)
+
+    logger.info(
+        "Indexando %d chunks no Chroma (%s)...",
+        len(chunks),
+        collection_name,
+    )
+    # filtra só os novos
+    new_chunks = []
+    new_ids    = []
+    for chunk in chunks:
+        chunk_id = get_chunk_id(chunk)
+        if chunk_id not in existing:
+            new_chunks.append(chunk)
+            new_ids.append(chunk_id)
+
+    if not new_chunks:
+        print("Nenhum chunk novo — índice já atualizado.")
+        return vectorstore
+
+    print(f"Indexando {len(new_chunks)} chunks novos...")
+    vectorstore.add_documents(documents=new_chunks, ids=new_ids)
+    print(f"Total agora: {vectorstore._collection.count()} chunks")
+
+    return vectorstore
+
+
+def debug_rag_pipeline(retriever, rag_chain, question: str, expected_answer: str):
+    """Diagnóstico em camadas — identifica onde o RAG está falhando."""
+
+    print(f"\n{'='*60}")
+    print(f"QUERY: {question}")
+    print(f"EXPECTED: {expected_answer}")
+    print(f"{'='*60}")
+
+    # Camada 1: o retriever encontrou algo?
+    docs = search_all_collections(question, persist_dir="./data/chroma_db",  k=4)
+    print(f"\n[RETRIEVER] {len(docs)} chunks retornados:")
+    for i, doc in enumerate(docs):
+        print(f"  [{i+1}] score={getattr(doc, 'score', 'N/A')} | {doc.page_content[:120]}...")
+
+    if not docs:
+        print("  !! PROBLEMA: retriever retornou 0 documentos")
+        print("  -> Verifique se os documentos foram indexados corretamente")
+        return
+
+    # Camada 2: o conteúdo esperado está em algum chunk?
+    keywords = expected_answer.lower().split()[:5]  # primeiras 5 palavras do ground truth
+    found_in_chunks = any(
+        any(kw in doc.page_content.lower() for kw in keywords)
+        for doc in docs
+    )
+    print(f"\n[CONTEÚDO] Keywords do ground truth encontradas nos chunks: {found_in_chunks}")
+    if not found_in_chunks:
+        print("  !! PROBLEMA: retriever retornou chunks, mas nenhum contém a informação esperada")
+        print("  -> Problema de chunking ou de embedding — veja Passo 2")
+
+    # Camada 3: o gerador usou o contexto?
+    answer = rag_chain.invoke(question)
+    print(f"\n[GERADOR] Resposta produzida:\n  {answer}")
+    print("\n[DIAGNÓSTICO FINAL]")
+    print(f"  Retriever achou contexto relevante : {found_in_chunks}")
+    print(f"  Resposta gerada                    : {'OK' if answer else 'VAZIA'}")
+
 # ---------------------------------------------------------------------------
 # Exemplo de uso completo (executar diretamente para testar)
 # ---------------------------------------------------------------------------
@@ -422,36 +585,10 @@ def run_pipeline(input: str) -> str:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # 1. Carrega dados históricos (substitua pelo dataset da empresa)
-    df_example = pd.DataFrame({
-        "date":   ["2024-01-10", "2024-01-11", "2024-01-12"],
-        "open":   [38.00, 38.50, 37.80],
-        "high":   [38.90, 39.00, 38.20],
-        "low":    [37.80, 38.10, 37.50],
-        "close":  [38.45, 38.80, 37.90],
-        "volume": [12_000_000, 9_500_000, 11_200_000],
-    })
 
-    # 2. Converte para Documents (EMBEDDING — etapa 1)
-    docs = stock_df_to_documents(df_example, ticker="PETR4")
-
-    # 3. Indexa no vector store (EMBEDDING — etapa 2)
-    # Na primeira execução: build_vector_store
-    # Nas execuções seguintes: load_vector_store
-    vector_store = build_vector_store(docs, persist_dir="./data/chroma_db")
+    vector_store = get_or_create_vector_store(collection_name="PETR4.SA")
 
     # 4. Constrói chain (RETRIEVER + GENERATOR)
-    retriever, chain = build_rag_chain(vector_store)
-
-    # 5. Faz uma query de teste
-    answer, contexts = query_rag_with_context(
-        retriever,
-        chain,
-        "Qual foi o fechamento de PETR4 no dia 10/01/2024?",
-    )
-
-    print("\n=== RESPOSTA ===")
-    print(answer)
-    print(f"\n=== CONTEXTOS USADOS ({len(contexts)}) ===")
-    for i, ctx in enumerate(contexts, 1):
-        print(f"\n[{i}] {ctx[:200]}...")
+    retriever, chain = build_rag_chain(vector_store,k=4)
+    debug_rag_pipeline(retriever, chain, "Qual foi o preço de fechamento de PETR4.SA no dia 10/06/2025?", 
+                       "O fechamento de PETR4 no dia 10/06/2025 foi de R$28,11.")

@@ -1,6 +1,8 @@
 import pandas as pd
 import argparse
 
+from src.agent.rag_pipeline import stock_df_to_documents, upsert_documents
+
 
 
 def parse_args():
@@ -12,6 +14,24 @@ def _create_strategy(df: pd.DataFrame):
     df["short_mm"] = df["Close"].rolling(5, min_periods=1).mean()
     df["medium_mm"] = df["Close"].rolling(15, min_periods=1).mean()
     df["large_mm"] = df["Close"].rolling(45, min_periods=1).mean()
+
+     # RSI (14 períodos)
+    df["Delta"] = df["Close"].diff()
+    df["Gain"]  = df["Delta"].clip(lower=0).rolling(14, min_periods=1).mean()
+    df["Loss"] = (-df["Delta"].clip(upper=0)).rolling(14, min_periods=1).mean()
+    df["RS"] = df["Gain"] / df["Loss"]
+    df["RSI"] = (100 - (100 / (1 + df["RS"])))
+    df = df.drop(columns=["Gain", "Loss", "RS"])
+    
+    # Bandas de Bollinger (20 períodos)
+    df["ma20"]       = df["Close"].rolling(20, min_periods=1).mean()
+    df["std20"]      = df["Close"].rolling(20, min_periods=1).std()
+    df["bb_upper_band"] = (df["ma20"] + 2 * df["std20"])
+    df["bb_lower_band"] = (df["ma20"] - 2 * df["std20"])
+    df = df.drop(columns=["ma20", "std20"])
+    df.dropna(inplace=True)
+
+
     return df
 
 
@@ -22,6 +42,8 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         #Cria a estrategia de medias moveis
         df = _create_strategy(df)
+        docs = stock_df_to_documents(df, stock)
+        upsert_documents(docs, stock)
         return df
     except(ValueError):
         raise ValueError("Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")

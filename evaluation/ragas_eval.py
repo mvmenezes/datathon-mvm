@@ -1,12 +1,10 @@
 """Avaliação do pipeline RAG com RAGAS — 4 métricas obrigatórias."""
 import json
 import logging
-
-from openai import AsyncOpenAI  # ✅ CORRIGIDO: era `from langchain_openai import OpenAI`
+import asyncio
+from openai import AsyncOpenAI
 from ragas.embeddings.base import embedding_factory
 import mlflow
-from datasets import Dataset
-from ragas import evaluate
 from ragas.llms import llm_factory
 from ragas.metrics.collections import (
     AnswerRelevancy,
@@ -19,20 +17,18 @@ from src.agent.rag_pipeline import query_rag_with_context, build_rag_chain, get_
 logger = logging.getLogger(__name__)
 
 
-def run_ragas_evaluation(
+async def run_ragas_evaluation(
     golden_set_path: str,
     retriever,
     rag_chain,
 ) -> dict[str, float]:
     """Avalia o pipeline RAG contra o golden set."""
 
-    # ✅ CORRIGIDO: AsyncOpenAI (não OpenAI do langchain), sem argumentos extras no llm_factory
     openai_client = AsyncOpenAI()
 
     llm = llm_factory(
         "gpt-4o-mini",
         client=openai_client,
-        # ✅ CORRIGIDO: `temperature` não é parâmetro do llm_factory — removido
     )
 
    
@@ -47,48 +43,61 @@ def run_ragas_evaluation(
         golden_set = json.load(f)
 
     # 2. Roda cada pergunta pelo RAG e coleta resultados
-    records = []
+    scores = {
+        "faithfulness": [],
+        "answer_relevancy": [],
+        "context_precision": [],
+        "context_recall": []
+    }
     for i, item in enumerate(golden_set): 
-        if i >= 2:
-            break
+
         answer, contexts = query_rag_with_context(
             retriever=retriever,
             rag_chain=rag_chain,
             question=item["query"],
         )
-        records.append({
-            "question":     item["query"],
-            "answer":       answer,
-            "contexts":     contexts,
-            "ground_truth": item["expected_answer"],
-        })
-        logger.info("Avaliado: %s", item["query"][:60])
 
-    # 3. Cria Dataset no formato que o RAGAS espera
-    dataset = Dataset.from_list(records)
-    metrics=[
-            Faithfulness(llm=llm),
-            AnswerRelevancy(llm=llm, embeddings=embeddings),
-            ContextPrecision(llm=llm),
-            ContextRecall(llm=llm),
-        ]
-    # 4. Calcula as 4 métricas
-    # ✅ CORRIGIDO: embeddings e llm passados também no evaluate(), conforme docs v0.4
-    scores = evaluate(
-        dataset=dataset,
-        metrics=metrics
-    )
+        scorer = Faithfulness(llm=llm)
+        scores["faithfulness"].append(await scorer.ascore(
+                    user_input=item["query"],
+                    response=answer,
+                    retrieved_contexts=contexts))
+        
+        scorer = AnswerRelevancy(llm=llm,embeddings=embeddings)
+        scores["answer_relevancy"].append(await scorer.ascore(
+                    user_input=item["query"],
+                    response=answer))
+        
+        scorer = ContextPrecision(llm=llm)        
+        scores["context_precision"].append(await scorer.ascore(
+                    user_input=item["query"],
+                    retrieved_contexts=contexts,
+                    reference=item["expected_answer"]))
+        
+        scorer = ContextRecall(llm=llm)
+        scores["context_recall"].append(await scorer.ascore(
+                    user_input=item["query"],
+                    reference=item["expected_answer"],
+                    retrieved_contexts=contexts))
+        
 
-    # ✅ CORRIGIDO: print com % não funciona assim — usar f-string ou logger
+    logger.info("Avaliado: %s", item["query"][:60])
+
+
+    metric_faithfulness = sum(scores["faithfulness"])/len(scores["faithfulness"]) 
+    metric_answer_relevancy = sum(scores["answer_relevancy"])/len(scores["answer_relevancy"])
+    metric_context_precision = sum(scores["context_precision"])/len(scores["context_precision"]) 
+    metric_context_recall = sum(scores["context_recall"])/len(scores["context_recall"]) 
+
     logger.info("RAGAS scores: %s", scores)
 
     metrics = {
-        "ragas/faithfulness":       float(scores["faithfulness"]),
-        "ragas/answer_relevancy":   float(scores["answer_relevancy"]),
-        "ragas/context_precision":  float(scores["context_precision"]),
-        "ragas/context_recall":     float(scores["context_recall"]),
+        "ragas/faithfulness":       float(metric_faithfulness),
+        "ragas/answer_relevancy":   float(metric_answer_relevancy),
+        "ragas/context_precision":  float(metric_context_precision),
+        "ragas/context_recall":     float(metric_context_recall),
     }
-
+    print(metrics)
     # 5. Loga no MLflow
     with mlflow.start_run(run_name="ragas_evaluation"):
         mlflow.log_metrics(metrics)
@@ -102,12 +111,11 @@ def run_ragas_evaluation(
 
 
 if __name__ == "__main__":
-    print(111)
-    vector_store = get_or_create_vector_store([])
+    vector_store = get_or_create_vector_store("PETR4.SA")
     retriever, chain = build_rag_chain(vector_store=vector_store)
 
-    run_ragas_evaluation(
-        "data/golden_set/golden_set.json",
+    asyncio.run(run_ragas_evaluation(
+        "data/golden_set_curto.json",
         retriever,
         chain,
-    )
+    ))
