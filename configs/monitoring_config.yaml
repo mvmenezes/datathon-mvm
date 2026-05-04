@@ -66,10 +66,6 @@ scrape_configs:
     - host.docker.internal:8000
     labels:
       app: fastapi
-  - job_name: "pushgateway"
-    static_configs:
-      - targets: ["pushgateway:9091"]
-    honor_labels: true  # importante — preserva labels do job
 otlp:
   translation_strategy: UnderscoreEscapingWithSuffixes
   label_name_underscore_sanitization: true

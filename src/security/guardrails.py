@@ -122,18 +122,18 @@ class OutputGuardrail:
         """
         
 
-        results = self.analyzer.analyze(
+        results  = self.analyzer.analyze(
             text=llm_output,
             language=self.language,
             entities=["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "BR_CPF", "BR_CNPJ"],
-        )
+        ) 
 
         if results:
             logger.warning("PII detectado no output: %d entidades", len(results))
             anonymized = self.anonymizer.anonymize(
                 text=llm_output,
-                analyzer_results=results,
-            )
+                analyzer_results=results, # type: ignore
+            ) 
             return anonymized.text
 
         return llm_output

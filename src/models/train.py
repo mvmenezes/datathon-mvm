@@ -1,5 +1,5 @@
 
-from sklearn.metrics import mean_absolute_error, mean_absolute_error, mean_absolute_percentage_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, mean_squared_error
 import torch
 import torch.nn as nn
 import numpy as np
@@ -20,7 +20,7 @@ MODEL_CONFIG = Path("configs/model_config.yaml")
 
 model = None
 MODEL_PATH = "./data/models/"
-MLFLOW_URI = "http://172.18.0.2:5000"
+MLFLOW_URI = "http://172.18.0.4:5000"
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stock", required=True, help="Ex: PETR4.SA")
@@ -28,10 +28,12 @@ def parse_args():
 
 def train_model(params: LSTMParams):
 
-    if check_host(ip="172.18.0.2", porta=5000):
+    if check_host(ip="mlflow", porta=5000):
         mlflow.set_tracking_uri(MLFLOW_URI)
+        print(f"Conectado ao MLflow Tracking Server em {MLFLOW_URI}")
     else:
         mlflow.set_tracking_uri("file:./mlruns")
+        print("Conectado ao MLflow Tracking Server em file:./mlruns")
 
     data_downloaded = recover_data_from_processed(params.stock)
     fields = ["Close","Volume","Dolar","short_mm","medium_mm","large_mm", "RSI", "bb_upper_band", "bb_lower_band"]
@@ -100,6 +102,8 @@ def train_model(params: LSTMParams):
             if loss_te < best_loss:
                 print(f"Saving best model with test loss {loss_te:.6f} at epoch {epoch}. Better than previous best loss {best_loss:.6f}")
                 best_loss = loss_te
+                #Criar pasta se não existir
+                Path(MODEL_PATH).mkdir(parents=True, exist_ok=True)
                 # salvar pesos
                 torch.save(model.state_dict(), MODEL_PATH+f"lstm_{params.stock}_{params.model_type}.pth")
                 pred_y = pred
@@ -117,7 +121,6 @@ def train_model(params: LSTMParams):
             "mean_absolute_percentage_error": mean_absolute_percentage_error(y_test, pred_y)
         }
         mlflow.log_metrics(metrics)
-        
         return {
             "message": "Modelo treinado com sucesso. ",
             "stock": params.stock,

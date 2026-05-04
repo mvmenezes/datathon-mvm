@@ -16,7 +16,6 @@ Acesso:
     - Métricas: http://localhost:8000/metrics
 """
 
-from functools import wraps
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -27,6 +26,8 @@ from starlette.responses import JSONResponse
 from fastapi import APIRouter
 import time
 import numpy as np
+from evaluation.drift_eval import drift_evaluation_pipeline
+from evaluation.ragas_eval import run_ragas_evaluation_from_api
 from src.agent.rag_pipeline import run_pipeline
 from src.agent.react_agent import run_agent
 from src.features.data import download_data, recover_data_from_raw, save_data_raw
@@ -36,11 +37,12 @@ from prometheus_client import Histogram, Gauge
 from ..features.feature_engineering import feature_engineering, save_parquet
 from src.models.train import train_model
 from src.models.predict import predict
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
+from evaluation.llm_judge import run_llm_judge
 import os
 
 # Criar instância da aplicação FastAPI
@@ -68,7 +70,7 @@ app = FastAPI()
 fake_users_db = {
     "marcus.menezes": {
         "username": "marcus.menezes",
-        "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$fO9di7GWMub8/18LQUjJWQ$IMGC/PQmERSI7tojq8KrP5wY1jwRqmwdSYxVXhB6xxo"  # senha: MarcusMenezes123
+        "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$fO9di7GWMub8/18LQUjJWQ$IMGC/PQmERSI7tojq8KrP5wY1jwRqmwdSYxVXhB6xxo" # nosec  # senha: MarcusMenezes123
     }
 }
 
@@ -167,7 +169,7 @@ def login(request: Request,form_data: OAuth2PasswordRequestForm = Depends()):
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer"} # nosec
 
 @app.get("/health")
 @limiter.limit("15/minute")
@@ -193,6 +195,46 @@ def download_data_post(request: Request, stock: dict, _ = Depends(get_current_us
         df = download_data(str(stock.get("stock")), str(stock.get("periodo", '6y')))
         save_data_raw(df, str(stock.get("stock")))
         return {"mensagem": f"Dados para a ação {stock} baixados com sucesso."}
+    except(ValueError) as e:
+        return JSONResponse(status_code=400, content={"erro": str(e)})
+    
+@app.post("/run_ragas")
+@limiter.limit("15/minute")
+def run_ragas(request: Request, stock: dict, _ = Depends(get_current_user)):
+    try:
+        metrics = run_ragas_evaluation_from_api(str(stock.get("stock")))
+        ragas_faithfulness.set(metrics["ragas/faithfulness"])
+        ragas_answer_relevancy.set(metrics["ragas/answer_relevancy"])
+        ragas_context_precision.set(metrics["ragas/context_precision"])
+        ragas_context_recall.set(metrics["ragas/context_recall"])
+
+        return metrics
+    except(ValueError) as e:
+        return JSONResponse(status_code=400, content={"erro": str(e)})
+    
+@app.post("/run_drift")
+@limiter.limit("15/minute")
+def run_drift(request: Request, stock: dict, _ = Depends(get_current_user)):
+    try:
+        metrics = drift_evaluation_pipeline(str(stock.get("stock")))
+        drift.set(metrics['drift_share'])
+
+        return metrics
+    except(ValueError) as e:
+        return JSONResponse(status_code=400, content={"erro": str(e)})   
+     
+@app.post("/run_llm_judge")
+@limiter.limit("15/minute")
+def run_llmjudge(request: Request, stock: dict, _ = Depends(get_current_user)):
+    try:
+        metrics = run_llm_judge()
+        
+        llm_judge_fidelidade_factual.set(metrics["fidelidade_factual"])
+        llm_judge_clareza_completude.set(metrics["clareza_completude"])
+        llm_judge_adequacao_negocio.set(metrics["adequacao_negocio"])
+        llm_judge_nota_geral_media.set( metrics["nota_geral_media"])
+
+        return metrics
     except(ValueError) as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})
 
@@ -341,6 +383,34 @@ erro_previsao = Gauge(
     "Melhor valor de erro da predição (valor real - valor previsto)",
 )
 
+
+# Métrica: Valor previsto da ação
+# Tipo: Gauge - registra valor instantâneo em reais (R$)
+ragas_faithfulness = Gauge(
+    "ragas/faithfulness",
+    "Métrica de fidelidade factual do RAGAS",
+)
+ragas_answer_relevancy = Gauge(
+    "ragas/answer_relevancy",
+    "Métrica de relevância da resposta do RAGAS",
+)
+ragas_context_precision = Gauge(
+    "ragas/context_precision",
+    "Métrica de precisão do contexto do RAGAS",
+)
+ragas_context_recall = Gauge(
+    "ragas/context_recall",
+    "Métrica de recall do contexto do RAGAS",
+)
+drift = Gauge(
+    "drift","Métrica de drift do modelo"
+)
+
+
+llm_judge_fidelidade_factual = Gauge("llm_judge_fidelidade_factual","indica se a resposta se baseia somente nos contextos ")
+llm_judge_clareza_completude = Gauge("llm_judge_clareza_completude","indica se a resposta foi clara ")
+llm_judge_adequacao_negocio = Gauge("llm_judge_adequacao_negocio","indica se a resposta A resposta seria útil para um profissional do mercado financeiro  ")
+llm_judge_nota_geral_media = Gauge("llm_judge_nota_geral_media","indica a media da nota ")
 """
 # ============================================================================
 # TRATAMENTO GLOBAL DE EXCEÇÕES

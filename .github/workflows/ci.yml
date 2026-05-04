@@ -41,7 +41,7 @@ jobs:
           poetry run pytest tests/ -x \
             --cov=src \
             --cov-report=xml \
-            --cov-fail-under=10 \
+            --cov-fail-under=40 \
             --junitxml=test-results.xml
             
       - name: Run RAGAS evaluation

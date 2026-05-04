@@ -42,6 +42,8 @@ def download_data(stock: str, periodo: str='6y'):
 
 def save_data_raw(df: pd.DataFrame, stock: str):
     try:
+        #Criar pasta se não existir
+        Path("data/raw").mkdir(parents=True, exist_ok=True)
         df.to_csv(f"data/raw/{stock}.csv", index=False)
         add_stock(stock)
     except(ValueError) as e:

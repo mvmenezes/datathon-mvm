@@ -1,11 +1,8 @@
 import pandas as pd
-import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 from jose import jwt
 from datetime import datetime, timedelta
-from limits import parse
-from slowapi.wrappers import Limit
 from src.serving.app import rate_limit_handler, app, SECRET_KEY, ALGORITHM, global_exception_handler
 from fastapi import Request
 from slowapi.errors import RateLimitExceeded

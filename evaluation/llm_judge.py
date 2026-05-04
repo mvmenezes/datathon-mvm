@@ -17,7 +17,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 JUDGE_PROMPT = """Você é um avaliador especialista em sistemas de IA para o mercado financeiro.
 
 Avalie a resposta abaixo segundo os critérios indicados.
-Para cada critério, atribua uma nota de 1 a 5 e justifique em 1-2 frases.
+Para cada critério, atribua uma nota de 0 a 10 e justifique em 1-2 frases.
 
 ---
 PERGUNTA DO USUÁRIO:
@@ -79,7 +79,7 @@ def llm_judge(
 
 def evaluate_golden_set(golden_set_path: str, rag_fn) -> dict:
     """Roda o judge em todo o golden set e agrega os resultados."""
-    with open(golden_set_path) as f:
+    with open(golden_set_path, encoding="utf-8") as f:
         golden_set = json.load(f)
 
     all_scores = []
@@ -108,6 +108,33 @@ def evaluate_golden_set(golden_set_path: str, rag_fn) -> dict:
     return summary
 
 
-if __name__ == "__main__":
+def run_llm_judge():
     scores = evaluate_golden_set("data/golden_set_curto.json", run_pipeline_llm_judge)
-    print(json.dumps(scores, indent=2))
+    os.makedirs("evaluation/results", exist_ok=True)
+    
+    print(scores)
+    # lê o que já existe
+    if os.path.exists("evaluation/results/latest.json"):
+        with open("evaluation/results/latest.json", "r", encoding="utf-8") as f:
+            current = json.load(f)
+    else:
+        current = {}
+    score_tratado =    { "llm_judge": {
+        "fundamentacao":          scores["fidelidade_factual"],
+        "clareza_recomendacao":   scores["clareza_completude"],
+        "adequacao_risco":        scores["adequacao_negocio"],
+        "nota_geral_media":        scores["nota_geral_media"],
+    }}
+    # merge (nível de categoria)
+    for category, metrics in score_tratado.items():
+        if category not in current:
+            current[category] = {}
+
+        current[category].update(metrics)
+
+    # escreve de volta
+    with open("evaluation/results/latest.json", "w", encoding="utf-8") as f:
+        json.dump(current, f, indent=4)
+    return scores
+if __name__ == "__main__":
+    run_llm_judge()

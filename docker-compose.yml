@@ -10,6 +10,9 @@ services:
       - SECRET_KEY=${SECRET_KEY}
     volumes:
       - mlflow_data:/mlflow
+    networks:
+      minha-rede:
+        ipv4_address: 172.18.0.8
     ports:
       - "8000:8000"
     command: uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
@@ -21,6 +24,9 @@ services:
     ports:
       - "5000:5000"
     command: "mlflow server --host 0.0.0.0 --port 5000"
+    networks:
+      minha-rede:
+        ipv4_address: 172.18.0.4
     volumes:
       - mlflow_data:/mlflow
   prometheus:
@@ -29,6 +35,9 @@ services:
       - "9090:9090"
     volumes:
       - ./configs/monitoring_config.yaml:/etc/prometheus/prometheus.yml
+    networks:
+      minha-rede:
+        ipv4_address: 172.18.0.7
     depends_on:
       - stock_predict
 
@@ -39,6 +48,9 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      minha-rede:
+        ipv4_address: 172.18.0.6
     depends_on:
       - prometheus    
     volumes:
@@ -46,20 +58,21 @@ services:
   prefect-server:
     image: prefecthq/prefect:3-latest
     command: prefect server start --host 0.0.0.0
+    networks:
+      minha-rede:
+        ipv4_address: 172.18.0.3
     ports:
       - "4200:4200"
-  worker:
-    image: prefecthq/prefect:3-latest  # <- troca build: . por isso
-    command: prefect worker start --pool "default-agent-pool"
-    environment:
-      - PREFECT_API_URL=http://prefect-server:4200/api
-    depends_on:
-      - prefect-server
 
-  pushgateway:
-    image: prom/pushgateway
-    ports:
-      - "9091:9091"
+
+
 volumes:      
   mlflow_data:
   grafana_data:
+
+networks:
+  minha-rede:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/24

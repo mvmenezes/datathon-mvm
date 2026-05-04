@@ -1,0 +1,14 @@
+{
+    "ragas": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "context_recall": 1.0,
+        "answer_relevancy": 1.0
+    },
+    "llm_judge": {
+        "fundamentacao": 10.0,
+        "clareza_recomendacao": 10.0,
+        "adequacao_risco": 10.0,
+        "nota_geral_media": 10.0
+    }
+}

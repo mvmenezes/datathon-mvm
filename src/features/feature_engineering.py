@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pandas as pd
 import argparse
 
+from src.features.data import download_data
 from src.agent.rag_pipeline import stock_df_to_documents, upsert_documents
 
 
@@ -34,6 +37,11 @@ def _create_strategy(df: pd.DataFrame):
 
     return df
 
+def run_from_download_to_featuring(stock: str):
+    df = download_data(stock, periodo="6y")
+    df_final = feature_engineering(df, stock)
+    return df_final
+
 
 def feature_engineering(df: pd.DataFrame, stock: str):
     try:
@@ -49,6 +57,8 @@ def feature_engineering(df: pd.DataFrame, stock: str):
         raise ValueError("Não foi possivel recuperar os dados da ação, tente novamente com outros parâmetros")
 
 def save_parquet(df: pd.DataFrame, stock: str):
+    #Criar pasta se não existir
+    Path("data/processed").mkdir(parents=True, exist_ok=True)
     df.to_parquet(f"data/processed/{stock}.parquet", index=False)
 
 def recover_data_from_raw(stock: str):

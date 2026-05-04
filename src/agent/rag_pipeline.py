@@ -14,7 +14,9 @@ Uso típico:
 import json
 import logging
 import os
+import re
 from typing import Any
+import unicodedata
 import chromadb
 from langchain_chroma import Chroma
 import hashlib
@@ -24,7 +26,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_core.runnables import  RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from src.security.guardrails import InputGuardrail, OutputGuardrail
@@ -33,6 +35,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 K = 5  # número de chunks a recuperar por query
+CHUNK_SIZE = 512  # tamanho máximo de cada chunk em caracteres
+CHUNK_OVERLAP = 0  # sobreposição entre chunks (evita perda de
 EMBEDDING = OpenAIEmbeddings(
         model="text-embedding-3-small",  # Mais barato, suficiente para o Datathon
     )
@@ -67,25 +71,20 @@ def stock_df_to_documents(df: pd.DataFrame, ticker: str) -> list[Document]:
         daily_change = (row["Close"] - row["Open"]) / row["Open"] * 100
 
         fomated_date = pd.to_datetime(row["Date"]).strftime("%d/%m/%Y")
-        content = f"""
-        No dia {fomated_date}, a ação {ticker} apresentou:
-A abertura foi de R$ {row['Open']:.2f} e o fechamento foi de R$ {row['Close']:.2f} (close).
-A máxima atingiu R$ {row['High']:.2f} e a mínima foi R$ {row['Low']:.2f}.
-O volume negociado foi de {int(row['Volume']):,} ações.
-A variação diária foi de {daily_change:.2f}%.
-A amplitude do dia foi de R$ {row['High'] - row['Low']:.2f}.
-O indicador de RSI foi de {row["RSI"]}
-O indicador de Bandas de Bolliner ficou entre {row["bb_lower_band"]:.2f} e {row["bb_upper_band"]:.2f}
-O dolar foi de R$ {row["Dolar"]:.2f}
-""".strip()
+        content = normalizar(f"""
+        [IDENTIDADE] data: {fomated_date} | ativo ou ação: {ticker}
+[PRECOS] abertura: R${row['Open']:.2f} | fechamento: R${row['Close']:.2f} | máxima: R${row['High']:.2f} | mínima: R${row['Low']:.2f} | amplitude: R${row['High'] - row['Low']:.2f}
+[VOLUME] volume: {int(row['Volume']):,} | variação diária: {daily_change:.2f}%
+[INDICADORES] RSI: {row["RSI"]} | BB_inferior: R${row["bb_lower_band"]:.2f} | BB_superior: R${row["bb_upper_band"]:.2f} | dolar: R${row["Dolar"]:.2f}
+""".strip())
 
         documents.append(Document(
             page_content=content,
             metadata={
-                "ticker": ticker,
-                "date": str(row["Date"]),
-                "source": "historical_prices",
-                "daily_change_pct": round(daily_change, 4),
+                "acao": ticker,
+                "data": str(fomated_date),
+                "origem": "historico",
+                "variacao diaria": round(daily_change, 4),
             },
         ))
 
@@ -132,9 +131,9 @@ def news_to_documents(news_list: list[dict], ticker: str) -> list[Document]:
     documents = []
     for item in news_list:
         content = f"""
-Notícia sobre: {ticker}
+Noticia sobre: {ticker}
 Data: {item.get('date', 'N/A')}
-Título: {item.get('headline', '')}
+Titulo: {item.get('headline', '')}
 Resumo: {item.get('summary', '')}
 """.strip()
 
@@ -238,6 +237,7 @@ def upsert_documents(
 def build_rag_chain(
     vector_store: Chroma,
     k: int = 4,
+    chunk_size: int = 512,
     model_name: str = "gpt-4o-mini",
     temperature: float = 0.0
 ) -> tuple[Any, Any]:
@@ -257,9 +257,10 @@ def build_rag_chain(
     """
     # RETRIEVER — busca por similaridade semântica
     K = k
+    CHUNK_SIZE = chunk_size # noqa
     retriever = vector_store.as_retriever(
         search_type="similarity",
-        search_kwargs={"k": k},
+        search_kwargs={"k": K},
     )
 
     # Prompt otimizado para análise de ações com dados históricos
@@ -287,10 +288,7 @@ def build_rag_chain(
 
     # Chain completa com LCEL (LangChain Expression Language)
     rag_chain = (
-        RunnableParallel({
-            "context": retriever | format_docs,
-            "question": RunnablePassthrough(),
-        })
+        RunnablePassthrough.assign(context=lambda x: x["context"])
         | prompt
         | llm
         | StrOutputParser()
@@ -333,7 +331,7 @@ def query_rag_with_context(
         >>> print(answer)
         >>> print(f"Contextos usados: {len(contexts)}")
     """
-
+    question = normalizar(question)
     validated, reason = InputGuardrail().validate(question)
     if not validated:
         logger.warning("Input inválido: %s", reason)
@@ -346,16 +344,22 @@ def query_rag_with_context(
         docs_retrieved = search_all_collections(question, persist_dir="./data/chroma_db")
 
     contexts = [doc.page_content for doc in docs_retrieved]
-
+    context_str = "\n\n".join(contexts)
     # Gera a resposta com a chain completa
-    answer = rag_chain.invoke(question)
-
-    answer_sanitized = OutputGuardrail().sanitize(answer)
+    answer = rag_chain.invoke({
+    "context": context_str,
+    "question": question
+    })
+    #descobrir qual o tipo da variavel
+    answer_sanitized = OutputGuardrail().sanitize(str(answer))
     logger.info(
         "Query processada | contextos=%d | pergunta='%s...'",
         len(contexts),
         question[:60],
     )
+    print("QUERY:", question)
+    print("ANSWER:", answer_sanitized)
+    print("CONTEXTS:", contexts)
     return answer_sanitized, contexts
 
 
@@ -419,6 +423,25 @@ def get_or_create_vector_store(collection_name: str = "langchain",
         logger.info("Vector store não encontrado — criando em %s.", persist_dir)
         return build_vector_store(persist_dir=persist_dir, collection_name=collection_name)
     
+def clean_collection(collection_name: str, persist_dir: str = "./data/chroma_db"):
+    """Limpa uma collection específica do ChromaDB.
+
+    Útil para reindexar do zero sem apagar o índice inteiro.
+
+    Args:
+        collection_name: Nome da collection a limpar.
+        persist_dir: Diretório do índice Chroma.
+
+    Example:
+        >>> clean_collection("PETR4.SA")
+    """
+    client = chromadb.PersistentClient(path=persist_dir)
+    try:
+        client.delete_collection(name=collection_name)
+        logger.info("Collection '%s' limpa com sucesso.", collection_name)
+    except Exception as e:
+        logger.error("Erro ao limpar collection '%s': %s", collection_name, str(e))
+        
 def run_pipeline(input: str) -> str:
     """Executa o Pipeline RAG com a entrada do usuário.
 
@@ -465,7 +488,12 @@ def search_all_collections(
     persist_dir: str,
 ) -> list[Document]:
     """Busca em todas as collections e retorna os melhores resultados."""
-
+    query = normalizar(query)
+    stock = extrair_ticker(query)
+    date = extrair_data(query)
+    if not stock or not date:
+        logger.warning("Não foi possível extrair ticker ou data da query: %s", query)
+        return []
     all_results = []
     client = chromadb.PersistentClient(path=persist_dir)
     collections = client.list_collections()
@@ -474,11 +502,19 @@ def search_all_collections(
         vectorstore = Chroma(
             persist_directory=persist_dir,
             embedding_function=EMBEDDING,
-            collection_name=col.name,
+            collection_name=col.name
         )
-        results = vectorstore.similarity_search_with_score(query, k=K)
+        results = vectorstore.similarity_search_with_score(
+                                query,
+                                k=K,
+                                filter={ 
+                                    "$and": [  # type: ignore
+                                        {"acao": {"$eq": stock}}, 
+                                        {"data": {"$eq": date}}, 
+                                    ] 
+                                }
+                            ) # type: ignore
         print(f"  Resultados encontrados: {len(results)}")
-        print(results)
         for doc, score in results:
             doc.metadata["collection"] = col.name  # rastreia a origem
             doc.metadata["score"] = score
@@ -508,7 +544,6 @@ def get_chunk_id(chunk) -> str:
 def index_documents_safe(
     documents: list,
     collection_name: str,
-    chunk_size: int = 512,
     chunk_overlap: int = 0,
 ) -> Chroma:
     """Indexa documentos sem duplicar — idempotente."""
@@ -519,7 +554,7 @@ def index_documents_safe(
     existing = set(vectorstore.get()["ids"])
     print(f"Chunks já indexados: {len(existing)}")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
+        chunk_size=CHUNK_SIZE,
         chunk_overlap=chunk_overlap,
     )
     chunks = splitter.split_documents(documents)
@@ -548,55 +583,24 @@ def index_documents_safe(
 
     return vectorstore
 
-
-def debug_rag_pipeline( rag_chain, question: str, expected_answer: str):
-    """Diagnóstico em camadas — identifica onde o RAG está falhando."""
-
-    print(f"\n{'='*60}")
-    print(f"QUERY: {question}")
-    print(f"EXPECTED: {expected_answer}")
-    print(f"{'='*60}")
-
-    # Camada 1: o retriever encontrou algo?
-    docs = search_all_collections(question, persist_dir="./data/chroma_db",  k=4)
-    print(f"\n[RETRIEVER] {len(docs)} chunks retornados:")
-    for i, doc in enumerate(docs):
-        print(f"  [{i+1}] score={getattr(doc, 'score', 'N/A')} | {doc.page_content[:120]}...")
-
-    if not docs:
-        print("  !! PROBLEMA: retriever retornou 0 documentos")
-        print("  -> Verifique se os documentos foram indexados corretamente")
-        return
-
-    # Camada 2: o conteúdo esperado está em algum chunk?
-    keywords = expected_answer.lower().split()[:5]  # primeiras 5 palavras do ground truth
-    found_in_chunks = any(
-        any(kw in doc.page_content.lower() for kw in keywords)
-        for doc in docs
-    )
-    print(f"\n[CONTEÚDO] Keywords do ground truth encontradas nos chunks: {found_in_chunks}")
-    if not found_in_chunks:
-        print("  !! PROBLEMA: retriever retornou chunks, mas nenhum contém a informação esperada")
-        print("  -> Problema de chunking ou de embedding — veja Passo 2")
-
-    # Camada 3: o gerador usou o contexto?
-    answer = rag_chain.invoke(question)
-    print(f"\n[GERADOR] Resposta produzida:\n  {answer}")
-    print("\n[DIAGNÓSTICO FINAL]")
-    print(f"  Retriever achou contexto relevante : {found_in_chunks}")
-    print(f"  Resposta gerada                    : {'OK' if answer else 'VAZIA'}")
-
 # ---------------------------------------------------------------------------
 # Exemplo de uso completo (executar diretamente para testar)
 # ---------------------------------------------------------------------------
+def normalizar(texto: str) -> str:
+    return unicodedata.normalize("NFKD", texto)\
+        .encode("ascii", "ignore")\
+        .decode("ascii")\
+        .lower()
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+def extrair_data(query: str) -> str | None:
+    match = re.search(r'\d{2}/\d{2}/\d{4}', query)
+    return match.group(0) if match else None
+
+def extrair_ticker(query: str) -> str | None:
+    match = re.search(r'\b[A-Za-z]{4}\d{1,2}(?:\.SA)?\b', query)
+    if match:
+        ticker = match.group(0).upper()
+        return ticker if ticker.endswith(".SA") else ticker + ".SA"
+    return None
 
 
-    vector_store = get_or_create_vector_store(collection_name="PETR4.SA")
-
-    # 4. Constrói chain (RETRIEVER + GENERATOR)
-    retriever, chain = build_rag_chain(vector_store,k=4)
-    debug_rag_pipeline(retriever, chain, "Qual foi o preço de fechamento de PETR4.SA no dia 10/06/2025?", 
-                       "O fechamento de PETR4 no dia 10/06/2025 foi de R$28,11.")
