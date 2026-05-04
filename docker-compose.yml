@@ -55,14 +55,7 @@ services:
       - prometheus    
     volumes:
       - grafana_data:/var/lib/grafana 
-  prefect-server:
-    image: prefecthq/prefect:3-latest
-    command: prefect server start --host 0.0.0.0
-    networks:
-      minha-rede:
-        ipv4_address: 172.18.0.3
-    ports:
-      - "4200:4200"
+
 
 
 

@@ -53,6 +53,7 @@ jobs:
       - name: Run LLM Judge
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: poetry run python -m evaluation.llm_judge
 
       - name: Check Gates anteriores
