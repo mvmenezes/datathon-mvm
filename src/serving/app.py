@@ -387,19 +387,19 @@ erro_previsao = Gauge(
 # Métrica: Valor previsto da ação
 # Tipo: Gauge - registra valor instantâneo em reais (R$)
 ragas_faithfulness = Gauge(
-    "ragas/faithfulness",
+    "ragas_faithfulness",
     "Métrica de fidelidade factual do RAGAS",
 )
 ragas_answer_relevancy = Gauge(
-    "ragas/answer_relevancy",
+    "ragas_answer_relevancy",
     "Métrica de relevância da resposta do RAGAS",
 )
 ragas_context_precision = Gauge(
-    "ragas/context_precision",
+    "ragas_context_precision",
     "Métrica de precisão do contexto do RAGAS",
 )
 ragas_context_recall = Gauge(
-    "ragas/context_recall",
+    "ragas_context_recall",
     "Métrica de recall do contexto do RAGAS",
 )
 drift = Gauge(
