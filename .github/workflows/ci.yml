@@ -37,6 +37,7 @@ jobs:
       - name: Unit tests (pytest)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           poetry run pytest tests/ -x \
             --cov=src \
